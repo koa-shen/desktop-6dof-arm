@@ -1,0 +1,60 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "C:/Users/koashen/desktop-6dof-arm/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/variants/standard",
+                "C:/Users/koashen/desktop-6dof-arm/lib/EncoderAS5600",
+                "C:/Users/koashen/desktop-6dof-arm/lib/MotorDriver",
+                "C:/Users/koashen/desktop-6dof-arm/lib/MuxTCA9548A",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "C:/Users/koashen/desktop-6dof-arm/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/variants/standard",
+                    "C:/Users/koashen/desktop-6dof-arm/lib/EncoderAS5600",
+                    "C:/Users/koashen/desktop-6dof-arm/lib/MotorDriver",
+                    "C:/Users/koashen/desktop-6dof-arm/lib/MuxTCA9548A",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=60119",
+                "ARDUINO_AVR_UNO",
+                "F_CPU=16000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10808",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++11",
+            "compilerPath": "C:/Users/koashen/.platformio/packages/toolchain-atmelavr/bin/avr-gcc.exe",
+            "compilerArgs": [
+                "-mmcu=atmega328p",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
