@@ -157,45 +157,179 @@ report a beautiful number that the tool does not agree with.
 
 ---
 
-## D5 - Motor sizing by joint tier - **OPEN**
+## D5 - Joint torque tiering: same face, different stack length
 
-**Question.** Should the wrist joints use a smaller motor than NEMA 17, rather
-than only a smaller reduction ratio?
+**Decision.** Every joint uses a **42 mm NEMA 17 face and one common joint
+envelope**. Torque is tiered two independent ways, neither of which requires a
+second mechanical design:
 
-**Where this came from.** UR tiers their joints by **physical module size**, not
-by ratio - three module sizes reused across the product line with overlap
-(UR3 = 3x size-1 + 3x size-0; UR5 = 3x size-2 + 3x size-1). Their big-to-small
-joint torque ratio is roughly 4.7:1 (~56 N.m vs ~12 N.m on a UR3, from service
-documentation - unverified). Ratio tiering alone, at 40:1 and 20:1 with one
-motor, only buys 2:1.
+1. **Motor body length** - 60 mm at the shoulder, ~40 mm mid-arm, ~23 mm at the
+   wrist. Same bolt circle, same shaft, same mount.
+2. **Reduction ratio** - high at the shoulder, low at the wrist.
 
-**Placeholder numbers** - these use assumed geometry (~400 mm reach, ~2 kg arm,
-0.3 kg payload) and **must be redone once real link masses exist**:
+**Why.** The original framing of this decision was wrong. I had it as a binary:
+one NEMA 17 everywhere (cheap to design, badly over-torqued at the wrist) versus
+a second motor size such as NEMA 11 (right-sized, but a second gearbox, a second
+bearing stack, and a second round of print iterations).
 
-| Joint | Static demand | x2 safety | Available | Margin |
-| ----- | ------------- | --------- | --------- | ------ |
-| Shoulder (J2) @ 40:1 | 5.1 N.m | 10.2 N.m | 13.4 N.m | 1.3x |
-| Wrist (J5) @ 20:1 | 0.44 N.m | 0.9 N.m | 6.7 N.m | **7.4x** |
+Stack-length tiering is a third option that dominates both. NEMA 17 is a
+**face** specification, not a torque specification - the 42 x 42 mm flange and
+bolt pattern are fixed while the rotor stack varies:
 
-Available torque assumes 0.42 N.m motor and 80 % gearbox efficiency.
+| Body | Holding torque | Mass | Output @ 20:1 | Output @ 26:1 |
+| ---- | -------------- | ---- | ------------- | ------------- |
+| 23 mm | ~0.13 N.m | ~0.15 kg | 2.1 N.m | 2.7 N.m |
+| 34 mm | ~0.28 N.m | ~0.24 kg | 4.5 N.m | 5.8 N.m |
+| 40 mm | ~0.42 N.m | ~0.28 kg | 6.7 N.m | 8.7 N.m |
+| 48 mm | ~0.59 N.m | ~0.39 kg | 9.4 N.m | 12.3 N.m |
+| 60 mm | ~0.68 N.m | ~0.60 kg | 10.9 N.m | 14.1 N.m |
 
-**The argument for a smaller wrist motor.** Three NEMA 17s is ~0.84 kg sitting
-at maximum moment arm on a ~2 kg arm. Dropping to NEMA 14 or 11 saves ~0.5 kg
-exactly where it hurts most, and it **compounds**: lighter wrist -> lower
-shoulder torque -> lower shoulder ratio -> higher shoulder speed. The wrist is
-7x over-torqued anyway, so the torque is not being used.
+Catalog values at 1.5-2.0 A, vendor-dependent, +/-25 %. Output assumes 80 %
+gearbox efficiency.
 
-**The argument against.** A second motor size means a second gearbox size, a
-second bearing stack, and a second set of print iterations - directly against
-the "design one joint module" principle in D1 that is supposed to keep this
-project finishable. Two mechanical designs instead of one is real cost.
+That is a **5.2x** torque spread from motor length alone, before any ratio
+tiering. UR's big-to-small joint spread on a UR3 is about 4.7x. The same
+mechanical envelope reaches UR-class tiering for the cost of ordering different
+part numbers.
 
-**Resolve this by:** completing the torque budget with measured/CAD link masses,
-not the placeholders above. If the wrist margin is still > 3x, the smaller motor
-is probably worth the second design. Note that UR pays this cost three times
-over, which suggests it is worth it at production scale - but this is not
-production scale.
+**Consequences.**
 
-**Related:** at 20:1 the wrist could also run a *lower* ratio for more speed,
-since torque is not the constraint there. That is a cheaper way to capture part
-of the same benefit without a second motor size.
+- The gearbox, bearing pocket, output flange, encoder mount, and link interface
+  are designed **once**. Ratio and motor length become per-joint configuration,
+  not per-joint engineering. This preserves the "design one joint module"
+  principle from D1 that keeps the project finishable.
+- Mass ends up where it does no harm. The 60 mm motor is the heaviest part of
+  the arm and sits at the shoulder, where its moment arm is near zero. The 23 mm
+  motors sit at the wrist, where moment arm is maximal. Choosing 23 mm over
+  40 mm for two wrist motors saves ~0.26 kg and removes ~0.77 N.m of shoulder
+  demand - which then permits a lower shoulder ratio, hence more shoulder speed.
+  The benefit compounds inboard.
+- Rotor inertia scales roughly with stack length, so a 60 mm motor has ~2.6x the
+  inertia of a 23 mm one. Long motors at the wrist would hurt acceleration even
+  where holding torque was adequate. Another reason not to use one motor
+  everywhere.
+- **Ratio selection is deferred, not decided.** Nothing about the envelope
+  depends on it. Settle ratios from `tools/torque_budget.py` once real link
+  masses exist.
+
+**Reference point.** Sweep Dynamics' Armold (475 mm reach, 750 g payload, 1.8 kg,
++/-1 mm repeatability, 24 V) uses exactly this scheme: 1x 60 mm + 3x 37.5 mm +
+2x 23 mm NEMA 17, with a family of drives that all share a 42 x 42 x 26 mm
+envelope in 4:1, 8:1, 20:1 and 26:1. Their combined motor-plus-ratio spread is
+roughly 17x. Verified from the vendor product pages; joint-by-joint assignment
+is inferred, not published.
+
+**Revision note.** The earlier version of this entry sized against a 0.3 kg
+payload on a ~2 kg arm. A shipping peer-class arm does 750 g on 1.8 kg, so that
+payload assumption was ~2.5x low. Back-solving Armold's shoulder at full
+extension gives ~5.7 N.m, with the payload contributing more than the arm's own
+mass, and that sits at the rated limit of their 20:1 drive. **The shoulder is
+the binding constraint and there is no comfortable margin in this class of
+machine.** Size it first; everything else has slack.
+
+---
+
+## D6 - End effector is a hobby servo, off the kinematic chain
+
+**Decision.** Gripper actuation is a 9 g metal-gear digital servo driving a
+printed rack and pinion, not a seventh stepper joint.
+
+**Why.** The gripper is not part of the 6-DOF pose solution. It has one degree
+of freedom, needs no absolute accuracy, and never participates in FK or IK. A
+servo is a closed-loop position system in a package: one PWM line, no driver, no
+encoder, no mux channel, no calibration app, no soft-limit fault path. Making it
+a stepper joint would add all of that to solve a problem that does not exist.
+
+A rack and pinion converts the servo's rotation to parallel jaw travel, and the
+pinion radius sets the force/travel tradeoff. At a typical 9 g servo's
+0.15-0.25 N.m stall torque:
+
+| Pinion radius | Jaw force @ 0.15 N.m | @ 0.25 N.m |
+| ------------- | -------------------- | ---------- |
+| 4 mm | 38 N | 62 N |
+| 6 mm | 25 N | 42 N |
+| 8 mm | 19 N | 31 N |
+
+Any of these vastly exceeds what is needed to hold a 750 g payload. Pick the
+pinion for **jaw travel**, not force, and expect the printed rack teeth to be
+the weak link before the servo is.
+
+**Firmware consequence - read before wiring.** The Arduino `Servo` library uses
+**Timer1** on the ATmega328P. `StepperDriver` currently generates steps by
+polling `micros()`, so there is no conflict today. If step generation ever moves
+to a hardware timer - which multi-axis coordination will want - Timer1 is taken.
+Plan to put step generation on Timer2, or move the gripper to a separate PWM
+source, or accept that this is one more reason the Uno is a bring-up platform
+rather than the final controller.
+
+**Consequence.** Gripper commands stay outside the joint controller entirely:
+an open-loop `g <percent>` command, not a PID axis.
+
+---
+
+## D7 - Control topology: three layers, and where "the brain" lives
+
+**Decision.** Three layers with hard boundaries, each running at its own rate.
+The boundaries are fixed now; which silicon runs each layer is allowed to change.
+
+| Layer | Rate | Owns | Runs on (now -> later) |
+| ----- | ---- | ---- | ---------------------- |
+| 2 Application | 1-50 Hz | goals, planning, vision, teach | PC -> PC or Pi w/ ROS 2 |
+| 1 Motion controller | 100-500 Hz | IK, trajectory interpolation, sync, whole-arm safety | Uno `app_06` -> STM32/ESP32 |
+| 0 Joint node | 1-10 kHz | one joint's servo loop, its own limits and faults | `JointController` in one binary -> one MCU per joint |
+
+**Why a separate layer 1 at all.** The defining job of the middle layer is not
+computation, it is **time synchronization**. Six joints must reach their
+waypoints simultaneously or the tool leaves the commanded path. No joint can do
+this alone, and layer 2 is too jittery to do it. That is the whole reason the
+layer exists.
+
+**The command idiom.** Layer 1 does **not** send "go to 45 degrees" and wait. It
+sends a *stream* of interpolated setpoints at a fixed rate - "be at 12.3 deg
+now" every few milliseconds. Joint nodes stay dumb; the host stays smart. Two
+alternatives, with the tradeoff named:
+
+- **Streaming setpoints** (UR and most industrial arms): host interpolates and
+  transmits every cycle. Maximum flexibility, but a dropped or late frame is
+  immediately visible in the motion. Needs low-jitter comms.
+- **Segment handoff**: host sends "reach X in T ms with this profile" and the
+  node interpolates locally. Tolerant of comms jitter, but the host can no
+  longer change its mind mid-segment.
+
+Start with streaming. Move to segments only if comms jitter proves to be the
+limiting factor.
+
+**Bus bandwidth sets the control rate.** A classic CAN 2.0A frame with 8 data
+bytes is ~111 bits worst case with stuffing:
+
+| Bitrate | Per frame | 6 cmd + 6 state | Ceiling | Joint-to-joint skew |
+| ------- | --------- | --------------- | ------- | ------------------- |
+| 250 kbps | 444 us | 5.33 ms | 188 Hz | 2.7 ms |
+| 500 kbps | 222 us | 2.66 ms | 375 Hz | 1.3 ms |
+| 1 Mbps | 111 us | 1.33 ms | 751 Hz | 0.7 ms |
+
+Skew is what it costs to send six command frames back to back. At 0.3 m/s tool
+speed, 1.3 ms of skew is ~0.4 mm of path error - the same order as the +/-1 mm
+repeatability this class of arm achieves anyway. **Run 1 Mbps** and keep the
+bus short; there is no reason to leave the margin on the table.
+
+**Non-negotiable: layer 0 must be safe alone.** A joint node holds position or
+stops on its own if the host stops talking. It never depends on the host for
+safety. Already implemented as `FAULT_COMMS` with a 500 ms timeout in
+`JointController`. The physical estop is a **hardware** line that pulls every
+driver ENABLE directly - it does not route through any MCU, because the failure
+mode it exists for is "the brain is wrong or hung".
+
+**Consequence for IK.** IK runs at layer 1, never at a joint - it needs every
+joint angle and the full kinematic model. Retaining closed-form IK (D1) is what
+makes this affordable on a microcontroller: a UR-style analytic solution is
+microseconds, where a numeric solver would force layer 1 onto Linux and drag
+its jitter into the motion.
+
+**Consequence for the model.** The kinematic model is a single source of truth
+in `tools/arm_model.py`, exported to a firmware header and to URDF. A joint node
+knows only its own ratio, direction, and limits - never the arm's geometry.
+
+**Consequence for today.** `app_06_multi_joint` already *is* layer 1 plus three
+instances of layer 0 in one binary. Splitting it later moves code across a
+boundary that already exists rather than inventing one.

@@ -21,12 +21,13 @@ cost/performance tradeoff later.
 
 ## Phase 3+ (per additional joint)
 
-Every joint is the same module: NEMA 17 + printed cycloidal reducer + output-side
-encoder. See [design-decisions.md](../../docs/design-decisions.md) D2.
+Every joint is the same module: 42 mm NEMA 17 face + printed cycloidal reducer +
+output-side encoder. See [design-decisions.md](../../docs/design-decisions.md)
+D2 and D5.
 
 | Qty | Item | Notes |
 | --- | ---- | ----- |
-| 1 | NEMA 17 | same motor at every joint; the reducer does the work |
+| 1 | NEMA 17 | same 42 mm face everywhere; **body length varies by joint** |
 | 1 | TMC2209 | |
 | 1 | AS5600 + diametric magnet | on the reducer **output** shaft |
 | 2 | Cycloidal discs (printed) | 180 deg apart for balance |
@@ -38,6 +39,24 @@ encoder. See [design-decisions.md](../../docs/design-decisions.md) D2.
 
 Cycloidal ratio = number of lobes on the disc, with one more pin than lobes
 (20 lobes + 21 pins -> 20:1). Design two ratios at most, per the torque budget.
+
+### Motor length by joint (provisional)
+
+Same bolt pattern, same shaft, same mount - only the rotor stack changes. Final
+assignment comes from the torque budget, not from this table.
+
+| Joint | Body | Holding torque | Rationale |
+| ----- | ---- | -------------- | --------- |
+| J2 shoulder | 60 mm | ~0.68 N.m | binding constraint; mass here has ~0 moment arm |
+| J1, J3, J4 | 40 mm | ~0.42 N.m | the motor already on hand |
+| J5, J6 | 23 mm | ~0.13 N.m | max moment arm; also lowest rotor inertia |
+
+### End effector
+
+| Qty | Item | Notes |
+| --- | ---- | ----- |
+| 1 | 9 g metal-gear digital servo | e.g. PTK 7465W MG; PWM, not a stepper axis |
+| 1 | Printed rack and pinion | pinion radius sets jaw travel; force is never the limit |
 
 ## Tiered upgrade path
 

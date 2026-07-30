@@ -17,9 +17,14 @@ career in robotics R&D. Favor explanations of *why* over just producing code.
   (non-spherical) wrist**. J2/J3/J4 are parallel, so closed-form IK still
   applies via Pieper's parallel-axis branch - do not assume numeric IK is
   required.
-- **Every joint is NEMA 17 + printed cycloidal reducer, 20:1 to 40:1.**
+- **Every joint is a 42 mm NEMA 17 face + printed cycloidal reducer, 20:1 to
+  26:1.** Torque is tiered by **motor body length** (60 mm shoulder / 40 mm
+  mid-arm / 23 mm wrist) and by ratio, never by changing the joint envelope.
   Consequences: ~89 steps/output-deg, so the encoder (not the motor) is the
   accuracy floor, and aggregate step-rate demand outgrows the Uno fast.
+- The gripper is a 9 g hobby servo on a printed rack and pinion. It is **not** a
+  kinematic joint - no encoder, no PID, no mux channel. Note the Arduino `Servo`
+  library claims Timer1 on the ATmega328P.
 - Rationale and tradeoffs live in `docs/design-decisions.md`. Append new
   decisions there rather than burying them in code comments.
 
