@@ -3,6 +3,18 @@
 ## Project goal
 Design and manufacture a desktop 6-DOF robotic manipulator arm and program it to move payloads across a desk.
 
+## Mechanical architecture
+- **Universal Robots-style 6R layout.** All motors housed in the joints. Axis
+  order: J1 vertical base, J2/J3/J4 parallel horizontal (shoulder, elbow,
+  wrist 1), J5 perpendicular, J6 along the tool axis.
+- **Offset (non-spherical) wrist.** Chosen for buildability. Because J2/J3/J4
+  are parallel, Pieper's criterion is still satisfied via the parallel-axis
+  branch, so **closed-form IK is retained** - see `docs/design-decisions.md`.
+- **Every joint is NEMA 17 + printed cycloidal reducer**, target 20:1 to 40:1.
+  One joint module design, scaled to ~3 sizes.
+- Encoder magnet on the **output** side of the reducer, so the reading includes
+  gearbox backlash.
+
 ## Current architecture decisions
 - Actuation: NEMA 17 stepper motors (1.5A, 42 N·cm), TMC2209 drivers
 - Position sensing: AS5600 magnetic absolute encoders
@@ -13,6 +25,15 @@ Design and manufacture a desktop 6-DOF robotic manipulator arm and program it to
 - Keep costs low now, prove mechanics + firmware in Phase 1
 - Avoid premature hardware spend
 - Build software in a way that can migrate later
+
+## Consequences of the cycloidal reduction (important)
+- At 20:1 and 8x microstepping: 32000 steps/output-rev = **88.9 steps/deg**.
+- One step = 0.011 deg at the output, finer than the AS5600's 0.088 deg, so the
+  **encoder is now the accuracy floor**. Do not raise microstepping for
+  resolution; 14-bit SPI encoders matter sooner than originally planned.
+- 60 deg/s on one joint needs 5300 steps/s. The Uno's aggregate ceiling is
+  ~5 kHz, so the MCU upgrade (Teensy 4.1, hardware-timer stepping) is required
+  earlier than a direct-drive design would need it.
 
 ## Available tools/supplies
 - Bambu P1S (ABS/TPU/PLA/PETG)

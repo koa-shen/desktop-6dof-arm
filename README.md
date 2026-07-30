@@ -96,6 +96,7 @@ Phase 1 begins when hardware arrives - see
 ## Docs
 
 - [Bring-up checklist](docs/bringup-checklist.md) - the arrival-day runbook
+- [Design decisions](docs/design-decisions.md) - arm topology, transmission, and why
 - [Phase plan](docs/phase-plan.md) - phases 0-6 with exit criteria
 - [Learning roadmap](docs/learning-roadmap.md) - what to study and what to build for a robotics career
 - [Troubleshooting](docs/troubleshooting.md) - symptom-first debugging

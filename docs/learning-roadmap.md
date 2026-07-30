@@ -37,20 +37,23 @@ In this order:
 Then change something and re-run `pio test -e uno_tests`. Break a test on
 purpose so you know the harness actually works.
 
-### 3. Decide your mechanical architecture (2-3 h)
+### 3. Nail down the joint module (2-3 h)
 
-Before you can design links you must pick:
-- **Joint layout**: the standard is a 6-DOF arm with a spherical wrist (last
-  three axes intersecting) because it gives a closed-form IK solution. Deviating
-  from that means numeric IK. Choose deliberately.
-- **Transmission per joint**: direct drive is easy but weak; a printed
-  cycloidal/planetary reducer or a GT2 belt reduction multiplies torque. Belt
-  reduction is by far the easiest to print and tune, and has low backlash.
-- **Where the AS5600 magnet mounts on each joint** - it must be on the
-  **output** side of the reduction, on the axis of rotation, with 0.5-3 mm gap
-  and no steel nearby.
+Topology and transmission are **decided** - UR-style 6R with an offset wrist,
+NEMA 17 + printed cycloidal at every joint. See
+[design-decisions.md](design-decisions.md) for the reasoning. What is still open:
 
-Write the decisions and the reasoning into `docs/design-decisions.md`. "Why did
+- **Cycloidal ratio per joint**, driven by the torque budget below. Pick from a
+  small set (e.g. 20:1 and 40:1) so you print two variants, not six.
+- **Joint module envelope** - the same design scaled to ~3 sizes. Get the
+  bearing stack, eccentric, and output flange right *once*.
+- **Where the AS5600 magnet mounts** - output side of the reducer, on the axis
+  of rotation, 0.5-3 mm gap, no steel nearby.
+- **Cable routing through the joint.** Motors in the joints means wires cross
+  every axis. Decide now whether that is a bundle with a service loop or a slip
+  ring, because it changes the housing.
+
+Keep appending decisions and reasoning to `docs/design-decisions.md`. "Why did
 you choose that?" is most of a design interview.
 
 ### 4. Torque budget (2 h) - do not skip this
@@ -66,9 +69,13 @@ N·m **just to hold still, unloaded**. That already exceeds a direct-drive NEMA
 - Compute the static holding torque for each joint at worst-case extension
 - Add payload, add a 2x safety factor
 - Divide by 0.42 N·m to get the reduction ratio each joint needs
+- Derate for gearbox efficiency - assume 70-80 % for a printed cycloidal until
+  you measure it, so a 20:1 stage delivers more like 16:1 of useful torque
 
 This calculation determines your entire mechanical design. Doing it in a
-spreadsheet now saves you from printing parts that cannot lift themselves.
+spreadsheet now saves you from printing parts that cannot lift themselves. It is
+also what tells you how many distinct cycloidal ratios you actually need to
+design - hopefully two.
 
 ### 5. Forward kinematics on paper, then in Python (3-4 h)
 

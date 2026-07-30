@@ -13,10 +13,13 @@ constexpr float MOTOR_FULL_STEPS_PER_REV = 200.0f;  // 1.8 deg NEMA 17
 //    L   H  -> 32
 //    H   L  -> 64
 //    H   H  -> 16
+// Stay at 8 once the cycloidal reducers are in: at 20:1 the encoder is already
+// ~8x coarser than one step, so extra microsteps buy nothing but step rate cost.
 constexpr float MICROSTEPS = 8.0f;
 
-// Output revolutions per motor revolution. 1.0 = direct drive.
-// A 5:1 reducer means the motor turns 5x for one joint turn -> 5.0f.
+// Motor revolutions per output revolution. 1.0 = direct drive (Phase 1 bench).
+// A 20:1 cycloidal reducer -> 20.0f. Measure it with the `calibration` app
+// rather than trusting the design value; printed reducers rarely hit nominal.
 constexpr float GEAR_RATIO = 1.0f;
 
 constexpr float STEPS_PER_MOTOR_REV = MOTOR_FULL_STEPS_PER_REV * MICROSTEPS;

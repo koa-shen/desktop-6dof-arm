@@ -12,6 +12,17 @@ career in robotics R&D. Favor explanations of *why* over just producing code.
   (all AS5600s share address 0x36, hence the mux)
 - 30 V 10 A bench PSU, Bambu P1S for PETG/TPU parts
 
+## Target mechanical architecture
+- **Universal Robots-style 6R arm**, motors in the joints, **offset
+  (non-spherical) wrist**. J2/J3/J4 are parallel, so closed-form IK still
+  applies via Pieper's parallel-axis branch - do not assume numeric IK is
+  required.
+- **Every joint is NEMA 17 + printed cycloidal reducer, 20:1 to 40:1.**
+  Consequences: ~89 steps/output-deg, so the encoder (not the motor) is the
+  accuracy floor, and aggregate step-rate demand outgrows the Uno fast.
+- Rationale and tradeoffs live in `docs/design-decisions.md`. Append new
+  decisions there rather than burying them in code comments.
+
 ## Repo conventions
 - **One firmware app per bring-up step** in `src/apps/`, each wired to its own
   PlatformIO environment via `build_src_filter`. Never add a second `setup()`

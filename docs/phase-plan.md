@@ -68,12 +68,15 @@ tolerance simultaneously.
 **Goal:** think in tool-space, not joint-space.
 
 - Forward kinematics: DH parameters for your actual mechanical design
-- Inverse kinematics: analytic solution for a spherical-wrist 6-DOF arm, or
-  numeric (Jacobian pseudoinverse / damped least squares) if your wrist is not
-  spherical
+- Inverse kinematics: the UR-style layout (J2/J3/J4 parallel) has a **closed-form
+  solution via Pieper's parallel-axis branch**, despite the offset wrist - see
+  [design-decisions.md](design-decisions.md). Implement numeric IK (Jacobian
+  pseudoinverse / damped least squares) as well and require the two to agree.
+- Measure the real wrist offsets $d_4, d_5, d_6$ on the built arm; they appear
+  directly in the IK equations and CAD nominal will not be accurate enough.
 - Workspace analysis: where can the tool actually reach?
-- Singularity awareness: what happens near a wrist singularity, and what will
-  you do about it?
+- Singularity awareness: shoulder, elbow, and wrist singularities - what happens
+  near each, and what will you do about it?
 
 Prototype all of this in Python first, verify against known poses, then port.
 
@@ -122,3 +125,22 @@ When you outgrow it, the options in increasing order of seriousness:
 
 `AS5600Encoder` deliberately hides the transport behind a small interface so the
 apps above it barely change when you swap. Keep it that way.
+
+### Which purchase belongs to which phase
+
+Full tier list, costs, and the measured ceilings behind each trigger are in
+[hardware/bom/bom.md](../hardware/bom/bom.md#tiered-upgrade-path). Summary of
+when each one becomes blocking:
+
+| Phase | Blocking purchase | Trigger |
+| ----- | ----------------- | ------- |
+| 1 | none | bench PSU, Uno, and one driver cover it |
+| 2 | endstops + e-stop | before the joint can hurt something |
+| 3 | **Teensy 4.1** + driver board | Uno tops out ~5 kHz aggregate = 56 deg/s for *one* geared joint |
+| 3-4 | **SPI encoders** | the day the first cycloidal reducer goes in; 12-bit becomes the accuracy floor |
+| 5 | CAN or integrated actuators | >8 wires crossing a joint, which motors-in-joints reaches fast |
+| 6 | host computer | ROS 2, planning, perception |
+
+The cycloidal decision (D2) pulled the Teensy and the SPI encoders **one phase
+earlier** than a direct-drive arm would need them, because 20:1 multiplies step
+demand by 20 and drops output resolution below what a 12-bit encoder can see.
