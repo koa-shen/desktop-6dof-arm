@@ -2,4 +2,6 @@
 .vscode/.browse.VC.db*
 .vscode/ipch/
 *.log
+!docs/test-results/*.log
+__pycache__/
 .DS_Store

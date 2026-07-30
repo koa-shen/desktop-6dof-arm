@@ -1,1 +1,1 @@
-ms,step_pos,angle_deg
+ms,cycle,cmd_steps,cmd_deg,enc_deg,err_deg,i2c_err
