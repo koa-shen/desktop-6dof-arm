@@ -333,3 +333,79 @@ knows only its own ratio, direction, and limits - never the arm's geometry.
 **Consequence for today.** `app_06_multi_joint` already *is* layer 1 plus three
 instances of layer 0 in one binary. Splitting it later moves code across a
 boundary that already exists rather than inventing one.
+
+---
+
+## D8 - Target envelope: 400 mm reach, 500 g payload
+
+**Decision.** Design to **400 mm reach** (base axis to flange, arm horizontal
+and fully extended) and **500 g payload at full extension**, with a printed
+gripper counted separately at ~120 g.
+
+**Why not larger.** From `tools/torque_budget.py`, requiring a 1.5x design
+factor on the shoulder gearbox rating:
+
+| Reach | Payload | Shoulder | Gearbox needed | Longest link | Link deflection |
+| ----- | ------- | -------- | -------------- | ------------ | --------------- |
+| 350 mm | 500 g | 3.69 N.m | 5.5 N.m | 147 mm | 0.09 mm |
+| **400 mm** | **500 g** | **4.26 N.m** | **6.4 N.m** | **168 mm** | **0.14 mm** |
+| 450 mm | 500 g | 4.84 N.m | 7.3 N.m | 189 mm | 0.20 mm |
+| 475 mm | 750 g | 6.29 N.m | 9.4 N.m | 199 mm | 0.28 mm |
+| 550 mm | 750 g | 7.37 N.m | 11.1 N.m | 231 mm | 0.44 mm |
+
+400 mm / 500 g needs a 6.4 N.m shoulder box - inside a high-torque cycloidal in
+the NEMA 17 envelope, which is a demonstrated product. 475 mm / 750 g needs
+9.4 N.m, which no printed drive in that envelope delivers with margin.
+
+**Note on the reference arm.** Armold publishes 475 mm and 750 g against a drive
+family rated 4-5 N.m. Our model puts that configuration at 6.29 N.m static, so
+their headline payload is running at roughly **1.0x or less** against the
+gearbox rating - almost certainly not simultaneously available at full
+extension. That is a normal way to spec a hobby arm, but it is not a design
+target to copy. Building to 1.5x is the difference between a demo and a machine
+that survives being used.
+
+**The print bed is not the binding constraint - correct that assumption.**
+Usable Bambu P1S footprint is ~240 mm flat, ~339 mm on the diagonal. The longest
+link at 400 mm reach is **168 mm**, and even at 550 mm reach it is only 231 mm.
+The bed does not bind until roughly 570 mm of reach. **The printed gearbox binds
+first, by a wide margin.** So do not split links to fit the bed: a bolted
+mid-link splice adds compliance exactly where the bending moment is highest,
+which costs repeatability to solve a problem that does not exist.
+
+The bed constraint that *does* bite is orientation, not size. A link printed
+lying flat has its layer planes parallel to the bending load; printed standing
+up they are perpendicular, at 40-70 % of the strength. Keep every structural
+link flat on the bed. 168 mm leaves 70 mm of margin to iterate the section
+without re-planning the print.
+
+**Links are not the accuracy problem - stop optimising them.** Upper-arm tip
+deflection at the chosen spec is **0.14 mm**. One AS5600 count at 400 mm reach
+is **0.61 mm**, over 4x larger. The structure is already four times stiffer than
+the sensor can observe. Two consequences:
+
+- Further stiffening the links is wasted mass that the shoulder pays for. The
+  section was already cut from 50x60x3.5 mm to 38x45x2.2 mm on this basis.
+- The remaining compliance that matters is in the **joints** - gearbox windup,
+  bearing play, backlash - which this model does not capture and which
+  `app_04_calibration`'s backlash test is the only way to measure.
+
+**Expected repeatability: +/-1 mm**, matching the reference arm, and set by the
+12-bit encoder rather than by the structure. Better than that requires a
+different encoder, not a better gearbox. See D3.
+
+**Provisional joint assignment at this spec:**
+
+| Joint | Demand | Motor | Ratio | Drive |
+| ----- | ------ | ----- | ----- | ----- |
+| J2 shoulder | 4.26 N.m | 60 mm | 26:1 | high-torque cycloidal |
+| J3 elbow | 1.96 N.m | 40 mm | 20:1 | standard cycloidal |
+| J1, J4 | low | 40 mm | 20:1 | standard cycloidal |
+| J5, J6 | < 0.5 N.m | 23 mm | 20:1 | standard cycloidal |
+
+J1 carries no gravity torque at all - it rotates about a vertical axis. J4 and
+J6 are roll axes along the arm, so gravity produces no moment about them either.
+Only J2, J3 and J5 are sized by statics.
+
+**Revisit when** link masses are measured rather than estimated. Update
+`tools/arm_model.py` and re-run; every number above follows from it.
