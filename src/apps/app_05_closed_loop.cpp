@@ -14,6 +14,11 @@
 //   x                  stop
 //   ?                  status
 //
+// Gains are entered and printed in the SAME units as joint_config.h (1/s, the
+// counts domain) and converted internally to this app's degrees domain. A
+// number you find by tuning here can then be pasted straight into the config
+// instead of being silently off by steps-per-degree.
+//
 // CSV: ms,target_deg,enc_deg,err_deg,cmd_vel,steps
 // Capture a step response with scripts/serial_logger.py and read overshoot /
 // settling time out of scripts/analyze_log.py. That plot is portfolio material.
@@ -34,7 +39,16 @@ static TCA9548A mux(TCA9548A_ADDR);
 static AS5600Encoder encoder(&mux, MUX_CH_J1);
 static StepperDriver motor(PIN_J1_STEP, PIN_J1_DIR, PIN_J1_EN,
                            DRIVER_EN_ACTIVE_LOW);
-static PidController pid(PID_KP, PID_KI, PID_KD);
+
+// Gains live in the counts domain (1/s). This app works in degrees, and one
+// degree of error is STEPS_PER_OUTPUT_DEG steps of correction, so all three
+// gains scale by the same single factor.
+static constexpr float kGainScale = STEPS_PER_OUTPUT_DEG;
+static constexpr float kDeadbandDeg =
+    POSITION_DEADBAND_COUNTS * armmath::kDegPerCount;
+
+static PidController pid(PID_KP * kGainScale, PID_KI * kGainScale,
+                         PID_KD * kGainScale);
 static SerialCli<40> cli;
 
 static float targetDeg = 0.0f;
@@ -64,11 +78,11 @@ static void printStatus() {
   Serial.print(F(" err="));
   Serial.print(targetDeg - encoder.angleDeg(), 3);
   Serial.print(F(" kp="));
-  Serial.print(pid.kp(), 2);
+  Serial.print(pid.kp() / kGainScale, 3);
   Serial.print(F(" ki="));
-  Serial.print(pid.ki(), 3);
+  Serial.print(pid.ki() / kGainScale, 3);
   Serial.print(F(" kd="));
-  Serial.print(pid.kd(), 3);
+  Serial.print(pid.kd() / kGainScale, 3);
   Serial.print(F(" magnet="));
   Serial.print(encoder.magnetText());
   Serial.print(F(" i2c_err="));
@@ -89,7 +103,7 @@ static void handleCommand(const char *line) {
       const float kp = strtod(p, &p);
       const float ki = strtod(p, &p);
       const float kd = strtod(p, &p);
-      pid.setGains(kp, ki, kd);
+      pid.setGains(kp * kGainScale, ki * kGainScale, kd * kGainScale);
       pid.reset();
       printStatus();
       break;
@@ -143,7 +157,7 @@ void setup() {
   motor.setPosition(0);
 
   pid.setOutputLimit(MAX_SPEED_STEPS_PER_SEC);
-  pid.setIntegralLimit(PID_INTEGRAL_LIMIT);
+  pid.setIntegralLimit(PID_INTEGRAL_LIMIT * armmath::kDegPerCount);
 
   Serial.println(F("# type 'h' to home, 'e' to enable, then 'g 30'"));
   Serial.println(F("ms,target_deg,enc_deg,err_deg,cmd_vel,steps"));
@@ -174,8 +188,16 @@ void loop() {
     }
 
     if (holdEnabled) {
-      const float cmdVel = pid.update(error, measured, dt);
-      motor.setVelocity(cmdVel);
+      // Deadband first: inside one encoder LSB there is no error worth
+      // chasing, only quantization, and chasing it is what makes a stepper
+      // hunt. Freeze the integrator rather than letting it wind on noise.
+      const float active = armmath::deadband(error, kDeadbandDeg);
+      if (active == 0.0f) {
+        pid.trackMeasurement(measured);
+        motor.setVelocity(0.0f);
+      } else {
+        motor.setVelocity(pid.update(active, measured, dt));
+      }
     }
 
     if (!settled && fabsf(error) <= POSITION_TOLERANCE_DEG) {

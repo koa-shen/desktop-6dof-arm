@@ -55,6 +55,19 @@ class PidController {
   float kd() const { return kd_; }
   float integral() const { return integral_; }
 
+  /// Keep the derivative state current without integrating or producing an
+  /// output. Used while the joint sits inside its in-position deadband: the
+  /// controller stops pushing, but the moment error leaves the band the D term
+  /// is still valid instead of spiking off a stale measurement.
+  void trackMeasurement(float measurement) {
+    lastMeasurement_ = measurement;
+    primed_ = true;
+    lastOutput_ = 0.0f;
+  }
+
+  /// Drop the integral only. Gains and derivative state survive.
+  void clearIntegral() { integral_ = 0.0f; }
+
  private:
   float kp_, ki_, kd_;
   float integral_ = 0.0f;

@@ -44,3 +44,9 @@ constexpr uint32_t I2C_CLOCK_HZ = 400000;
 
 // ------------------------------------------------------------------ Misc --
 constexpr uint32_t SERIAL_BAUD = 115200;
+
+// Binary host link (app_08). 115200 cannot carry streamed setpoints: three
+// joints in and out at 200 Hz is ~15.6 kB/s of framed traffic against an
+// 11.5 kB/s link. The Uno's 16U2 does 500000 cleanly; a CH340 clone may not,
+// in which case fall back to 250000 and halve the streaming rate.
+constexpr uint32_t LINK_BAUD = 500000;

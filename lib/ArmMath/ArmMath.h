@@ -49,14 +49,59 @@ inline float slew(float value, float target, float maxStep) {
   return target;
 }
 
+/// Zero inside +/-width. On a stepper the encoder LSB (0.088 deg) is ~8
+/// microsteps wide, so without this the controller chases an error it can
+/// never resolve and the joint limit-cycles at rest.
+inline float deadband(float value, float width) {
+  if (value > width) return value - width;
+  if (value < -width) return value + width;
+  return 0.0f;
+}
+
+/// Boxcar filter. Convolving a trapezoidal profile with a window of length
+/// N*dt yields a genuinely jerk-limited profile with jmax = amax/(N*dt), at
+/// the cost of extending the move by exactly N*dt. Cheaper and harder to get
+/// wrong than a 7-segment S-curve, and it is a linear operator, so filtering
+/// position and velocity with the same window keeps them consistent.
+template <uint8_t N>
+class MovingAverage {
+ public:
+  void reset(float value = 0.0f) {
+    for (uint8_t i = 0; i < N; ++i) buf_[i] = value;
+    sum_ = value * N;
+    idx_ = 0;
+  }
+
+  float update(float sample) {
+    sum_ -= buf_[idx_];
+    buf_[idx_] = sample;
+    sum_ += sample;
+    idx_ = static_cast<uint8_t>((idx_ + 1) % N);
+    return sum_ / N;
+  }
+
+  float value() const { return sum_ / N; }
+  static constexpr uint8_t taps() { return N; }
+
+ private:
+  float buf_[N] = {};
+  float sum_ = 0.0f;
+  uint8_t idx_ = 0;
+};
+
 /// Turns a wrapped 0-360 single-turn reading into a continuous multi-turn
 /// angle. This is what makes a single-turn AS5600 usable on a joint that
 /// rotates through its zero crossing.
 class AngleUnwrapper {
  public:
-  void reset(float wrappedDeg = 0.0f) {
+  void reset(float wrappedDeg = 0.0f) { resetTo(wrappedDeg, 0); }
+
+  /// Same, but you choose the turn count. Needed at power-on with an absolute
+  /// encoder: a joint sitting at -30 deg reads 330 deg, and only the caller
+  /// knows the joint's range well enough to say that means turns = -1.
+  void resetTo(float wrappedDeg, int32_t turns) {
     last_ = wrap360(wrappedDeg);
-    turns_ = 0;
+    turns_ = turns;
     primed_ = true;
   }
 

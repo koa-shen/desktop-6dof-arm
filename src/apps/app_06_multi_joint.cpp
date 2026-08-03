@@ -85,11 +85,16 @@ void setup() {
   cfg.default_max_vel = (uint16_t)(MAX_SPEED_STEPS_PER_SEC / cfg.steps_per_count);
   cfg.following_err_max = degToCounts(15.0f);
   cfg.max_step_rate = MAX_SPEED_STEPS_PER_SEC;
+  cfg.vel_ff_scale = VEL_FF_SCALE;
+  cfg.integral_limit = PID_INTEGRAL_LIMIT;
+  cfg.in_position_counts = POSITION_DEADBAND_COUNTS;
+  cfg.absolute_home = ABSOLUTE_HOME;
 
   for (uint8_t i = 0; i < kNumJoints; ++i) {
     enc[i].begin();
     drv[i].begin();
     drv[i].setAcceleration(ACCEL_STEPS_PER_SEC2);
+    cfg.home_offset_deg = JOINT_HOME_OFFSET_DEG[i];
     joint[i].begin(cfg);
     cmd[i].mode = MODE_HOLD;
     cmd[i].flags = 0;

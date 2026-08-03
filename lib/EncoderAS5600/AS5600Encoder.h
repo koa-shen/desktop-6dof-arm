@@ -85,6 +85,26 @@ class AS5600Encoder {
     primedFilter_ = true;
   }
 
+  /// Power-on homing for an output-side absolute encoder (D4): declare which
+  /// mechanical angle is joint zero and the joint knows where it is with no
+  /// homing move, no limit switch, and no hard-stop crash.
+  ///
+  /// The subtlety this exists for: the raw pipeline wraps into [0, 360), so a
+  /// joint resting at -30 deg would report 330 deg and every soft limit would
+  /// be wrong. A joint's travel is inside +/-180 deg of zero, so resolving the
+  /// first sample into [-180, 180) is unambiguous.
+  bool homeAbsolute(float zeroMechanicalDeg) {
+    zeroDeg_ = armmath::wrap360(zeroMechanicalDeg);
+    if (!read()) return false;
+    const float wrapped =
+        armmath::wrap360(direction_ * (mechanicalDeg_ - zeroDeg_));
+    const int32_t turns = (wrapped > 180.0f) ? -1 : 0;
+    unwrapper_.resetTo(wrapped, turns);
+    continuousDeg_ = filtered_ = unwrapper_.continuousDeg();
+    primedFilter_ = true;
+    return true;
+  }
+
   void setZeroOffsetDeg(float deg) { zeroDeg_ = armmath::wrap360(deg); }
   void setDirection(int8_t dir) { direction_ = (dir < 0) ? -1 : 1; }
   /// 1.0 = no filtering. ~0.2-0.4 is a good starting point under motor noise.
