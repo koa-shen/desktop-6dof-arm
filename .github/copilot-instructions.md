@@ -20,8 +20,10 @@ career in robotics R&D. Favor explanations of *why* over just producing code.
 - **Every joint is a 42 mm NEMA 17 face + printed cycloidal reducer, 20:1 to
   26:1.** Torque is tiered by **motor body length** (60 mm shoulder / 40 mm
   mid-arm / 23 mm wrist) and by ratio, never by changing the joint envelope.
-  Consequences: ~89 steps/output-deg, so the encoder (not the motor) is the
-  accuracy floor, and aggregate step-rate demand outgrows the Uno fast.
+  Consequences: ~89 steps/output-deg, and aggregate step-rate demand outgrows
+  the Uno fast. The accuracy floor is **backlash and reducer windup, not the
+  encoder** - see D17 and `tools/error_budget.py` before repeating the older
+  "12-bit encoder is the accuracy floor" claim, which the budget refutes.
 - The gripper is a 9 g hobby servo on a printed rack and pinion. It is **not** a
   kinematic joint - no encoder, no PID, no mux channel. Note the Arduino `Servo`
   library claims Timer1 on the ATmega328P.

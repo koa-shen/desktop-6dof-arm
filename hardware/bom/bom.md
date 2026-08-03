@@ -3,6 +3,10 @@
 Fill in the actuals as parts arrive. Track cost so you can talk about the
 cost/performance tradeoff later.
 
+**Tools** - as opposed to parts - are listed per phase, with what is blocking
+and what is merely nice to have, in
+[docs/build/README.md](../../docs/build/README.md#master-tool-list).
+
 ## Phase 1 (single joint bench)
 
 | Qty | Item | Notes | Have? | Cost |
@@ -102,11 +106,18 @@ projects stall. Prices are rough and need checking at purchase time.
 | ---- | ----- | --- |
 | **AS5047P / MA732 SPI encoders** | $8-12 ea | 6 encoders in ~30 us vs ~4200 us. 14-bit = 0.022 deg vs 0.088 deg. |
 
-The cycloidal reduction moves this up the list. At 20:1 and 8x microstepping one
-step is 0.011 deg at the output, so the 12-bit AS5600 is already **8x coarser
-than a single step** - it is the accuracy floor the day the first reducer goes
-in. `AS5600Encoder` hides the transport behind a small interface specifically so
-this swap barely touches the apps.
+The cycloidal reduction moves this up the list, but **for latency, not for
+accuracy**. At 20:1 and 8x microstepping one step is 0.011 deg at the output, so
+the 12-bit AS5600 is 8x coarser than a single step - which sounds like an
+accuracy floor and is not one. `tools/error_budget.py` puts encoder
+quantization at 0.37 mm of tip error against backlash's 4.25 mm and reducer
+windup's 6.25 mm (D17). Going 14-bit shrinks the smallest term in the budget.
+
+Buy these for the **~30 us vs ~4200 us read time across six joints** and for
+retiring the mux as a single point of failure. Do not buy them expecting
+sub-millimetre accuracy - that is a gearbox problem. `AS5600Encoder` hides the
+transport behind a small interface specifically so this swap barely touches the
+apps.
 
 ### Tier 3 - distributed control
 

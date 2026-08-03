@@ -391,9 +391,13 @@ the sensor can observe. Two consequences:
   bearing play, backlash - which this model does not capture and which
   `app_04_calibration`'s backlash test is the only way to measure.
 
-**Expected repeatability: +/-1 mm**, matching the reference arm, and set by the
-12-bit encoder rather than by the structure. Better than that requires a
-different encoder, not a better gearbox. See D3.
+**Expected repeatability: +/-1 mm**, matching the reference arm - but **only
+under unidirectional approach**, and set by backlash rather than by the encoder
+whenever approach direction varies. The original version of this paragraph said
+the 12-bit encoder set the floor; `tools/error_budget.py` shows quantization
+contributes 0.37 mm against backlash's 4.25 mm. See **D17**, which supersedes
+the claim. Better repeatability requires a **better gearbox or a one-way
+approach**, not a different encoder.
 
 **Provisional joint assignment at this spec:**
 
@@ -764,3 +768,254 @@ already exists in the layer boundary.
 
 Do not spend effort shrinking `app_07`. It has already done its job by producing
 this number.
+
+---
+
+## D14 - Simulation: pick a model format, not a simulator
+
+**Decision.** URDF generated from `tools/arm_model.py` is the interchange
+format. **Drake** is the primary engine, **MuJoCo** is a secondary engine kept
+alive purely as an independent cross-check, and the simulator attaches to the
+system as a **transport** behind `tools/joint_link.py` rather than as a separate
+application. Full plan in [simulation-plan.md](simulation-plan.md).
+
+**Why not just pick one simulator.** Every engine in this space is replaceable
+and several will be replaced within the project's lifetime. What is not
+replaceable is the kinematic and inertial model, which already has a single
+source of truth in `arm_model.py`. Committing to a format and generating the
+model means the same arm loads in Drake, MuJoCo, PyBullet, RViz and MoveIt, and
+the engine choice stops being architectural. This is the same move already made
+for the encoder transport (`AS5600Encoder`) and the joint protocol
+(`JointCommand`/`JointState`) - hide the thing that will change behind the thing
+that will not.
+
+**The URDF must be generated, never hand-edited.** A hand-written URDF that
+drifts from `arm_model.py` produces a simulation that is confidently wrong,
+which is worse than having none. CI diffs the generated file against the
+committed one.
+
+**Why Drake as primary.** Of the candidates it is the only one whose systems
+framework natively expresses *sampled-data* structure: systems with declared
+discrete update periods and explicit ports. That maps 1:1 onto the D7 layering -
+layer 0 at 1 kHz, layer 1 at 200 Hz, layer 2 at 10 Hz - in one diagram, with
+correct semantics at each boundary. A physics engine alone makes that the user's
+problem. Drake is also the tool where *verification* rather than *visualisation*
+is the organising idea, which is the point of the exercise, and it is an
+existing skill from the LCLS/XCS digital-twin work, so the marginal cost is low.
+
+**The cost, and it is real.** Drake officially supports Ubuntu and macOS only.
+On this Windows machine that means WSL2 or Docker for every Drake session. That
+is a genuine daily friction, and it is why MuJoCo - `pip install mujoco`,
+natively - is kept as the second engine rather than dropped. The second engine
+also earns its keep: two independent implementations agreeing on forward
+kinematics and gravity torque is the same validation pattern `kinematics.py`
+already uses internally when it checks DH against product-of-exponentials.
+
+**Why the simulator is a transport, not an application.** D12 put a framed
+binary protocol at the layer-0/layer-1 boundary, and `tools/joint_link.py`
+already hides the serial port behind an interface. A `SimTransport` that speaks
+the same 8-byte structs makes the simulator a **drop-in replacement for the
+hardware**: `pick_place.py --sim` and `pick_place.py --port COM5` run the
+identical planner, trajectory generator, and task FSM. This is what
+`ros2_control`'s `hardware_interface` is for, and what every industrial HIL rig
+does. Building it here costs almost nothing because the seam already exists.
+
+**Explicitly deferred.** ROS 2, Gazebo and MoveIt are a Phase 6 decision. The
+hiring signal is real and the URDF makes them cheap later, but a ROS stack
+standing on an unvalidated model is impressive-looking and proves nothing.
+
+**Revisit when** contact-rich manipulation matters (MuJoCo's contact model
+becomes the better primary), or when a second person needs to run the stack
+(the ROS interfaces stop being overhead and start being the point).
+
+---
+
+## D15 - A model is not trusted until its disagreement is a number
+
+**Decision.** Every simulation level must reproduce a measurement from an
+adjacent level before its results are quoted. The sim-to-real gap is reported as
+a table of six canonical manoeuvres with a percentage error each, produced by
+`sim/validate.py`. Detail in [test-plan.md](test-plan.md).
+
+**Why this is a decision and not a platitude.** The repo already quotes
+simulation results as if they were facts - D10's settling times, D8b's workspace
+volume, the 83 reversals per second. Two of those three are load-bearing in
+other decisions. But `joint_sim.py`'s reducer stiffness (300 N·m/rad) and
+damping (15 % of critical) are **estimates**, D10 says so in a caveat, and the
+caveat is easy to lose. Making validation a gate rather than a footnote is the
+difference between a model that informs decisions and one that launders guesses
+into them.
+
+The parameters that have to be measured rather than assumed:
+
+| Parameter | Currently | Measurement | Time |
+| --------- | --------- | ----------- | ---- |
+| Link masses and CoM | estimated | scale + knife-edge balance | 20 min |
+| Reducer torsional stiffness | estimated 300 N.m/rad | hang a known mass, read encoder deflection | 20 min |
+| Damping ratio | estimated 15 % critical | tap test, log-decrement on the ring-down | 20 min |
+| Backlash | estimated 0.5 deg | dial indicator on a lever arm | 30 min |
+| Coulomb + viscous friction | not modelled | constant-velocity sweeps | 1 h |
+| Gearbox efficiency | assumed 80 % | stall torque vs motor torque x ratio | 30 min |
+| Loop rate and jitter | assumed | GPIO toggle + logic analyser | 30 min |
+
+Under a day of bench time. It converts every simulation number in the repo from
+plausible to defensible, and it is the cheapest credibility available.
+
+**Predicted worst disagreements, recorded before measuring** - because
+predicting first is the only version of this exercise that is honest:
+Stribeck friction near zero velocity (the sim will be optimistic on small
+steps), backlash under load exceeding the static measurement, thermal drift,
+and print-to-print variation between nominally identical joints.
+
+**Consequence for the artifact.** The deliverable is one figure: commanded,
+simulated and measured on one time axis with the residual underneath. It is
+worth more than any rendering, because it is the only one that states how wrong
+the model is.
+
+**Consequence for testing.** Assertions go on *relationships*, not absolute
+numbers - "a deadband of at least 1 count gives zero reversals", "feedforward
+reduces overshoot by more than 5x". Those survive a model refinement; a
+hard-coded 1.37 s settling time does not.
+
+---
+
+## D16 - Validation depth over control sophistication
+
+**Decision.** Control law scope is frozen at **PID plus velocity and gravity
+feedforward** until the sim-to-real gap is published as a number (S4 of
+[simulation-plan.md](simulation-plan.md)). State-space, LQR, computed-torque,
+backlash compensation, friction feedforward, observers and impedance control are
+collected in Phase 7 of [phase-plan.md](phase-plan.md) and not started before
+then. When validation work and controller work compete for the same evening,
+validation wins.
+
+**Why, in one line.** Every deferred technique needs a plant model that does not
+exist yet, so doing them first means tuning them against estimates.
+
+That is not a discipline argument, it is a dependency:
+
+| Technique | Model parameter it depends on | Currently |
+| --------- | ---------------------------- | --------- |
+| LQR / pole placement | 2nd-order plant: inertia, stiffness, damping | estimated |
+| Computed torque | link inertia tensors | CAD estimates |
+| Backlash compensation | backlash under load | not measured |
+| Friction feedforward | Coulomb + viscous + Stribeck coefficients | not modelled |
+| Disturbance observer | a trusted nominal model | the thing S4 produces |
+
+Fit one of these to wrong parameters and it works on one build of one joint,
+cannot be explained, and silently stops working when the next joint is printed
+0.1 mm tighter. That failure is hard to even detect, which is what makes it
+worth a decision rather than a preference.
+
+**The second reason is what the result is worth.** "I implemented LQR" invites
+"on what model?" and there is no good answer without the validation. "My model
+predicted 180 ms settling, the hardware did 205 ms, the 14 % gap is Stribeck
+friction near zero velocity which the model does not capture" is a stronger
+statement, is harder to fake, and is the thing that separates a robotics project
+from a robotics *engineering* project. The scarce skill at this level is not
+knowing more controllers; it is being able to say how wrong you are.
+
+**Consequences.**
+- Phase 2 exits on the **model-vs-bench comparison table**, not on the tuning.
+  Swapping controllers mid-validation destroys the comparison, which is the
+  concrete reason to freeze scope rather than a stylistic one.
+- The simulation track (S0-S4) outranks the optional parts of Phases 4-6.
+  S0-S3 need no hardware, so this is also the answer to "the bench is blocked,
+  what do I work on."
+- The learning roadmap inserts **system identification** and **model
+  validation** between PID and LQR, rather than jumping from one to the other.
+- Ideas that arrive mid-Phase-2 get written into Phase 7 instead of acted on.
+
+**The tradeoff, named.** This trades breadth of demonstrated technique for depth
+on one. A reviewer scanning for buzzwords sees fewer of them. That is a real
+cost and it is accepted deliberately: the depth signal survives follow-up
+questions and the breadth signal does not.
+
+**Revisit when** S4 publishes its agreement table. At that point Phase 7 opens,
+and the acceptance test for anything in it is beating the Phase 2 PID on the
+*same* step-response table - not "it feels smoother."
+
+---
+
+## D17 - The encoder is not the accuracy floor. Backlash and windup are.
+
+**Decision.** The headline spec changes from a bare "+/-1 mm" to two separate
+numbers with stated conditions, and the justification for the SPI encoder
+upgrade is withdrawn. Produced by `tools/error_budget.py`, which propagates
+per-joint angular error through the linear part of the geometric Jacobian:
+$\delta p = J_v(q)\,\delta q$.
+
+**What the budget says** at full extension, 400 mm nominal reach:
+
+| Source | Tip error | Kind |
+| ------ | --------- | ---- |
+| Reducer windup under gravity | 6.25 mm | systematic, load-dependent |
+| Encoder non-linearity (INL) | 4.64 mm | systematic, calibratable |
+| Backlash | 4.25 mm | random if approach direction varies |
+| Axis misalignment (0.2 deg) | 3.09 mm | systematic, calibratable |
+| Link length tolerance | 1.50 mm | systematic, calibratable |
+| Magnet eccentricity | 1.55 mm | systematic, calibratable |
+| **Encoder quantization** | **0.37 mm** | random |
+| Link bending deflection | 0.21 mm | systematic |
+| Encoder noise | 0.13 mm | random |
+
+**Encoder quantization is the third-smallest term in the budget.** D8 and the
+BOM both assert the 12-bit AS5600 "is the accuracy floor." That is wrong as
+stated. One count at full reach is ~0.5 mm, which is true and is where the
+claim came from - but backlash at an assumed 0.5 deg is 4.25 mm, roughly 8x
+larger, and reducer windup is larger still.
+
+**D8's claim survives, but only under an unstated condition.** "Repeatability
+set by the encoder" is correct *if every point is approached from the same
+direction*, because unidirectional approach removes backlash from the random
+budget:
+
+| Approach | Repeatability |
+| -------- | ------------- |
+| Bidirectional | 4.27 mm |
+| Unidirectional | 0.43 mm |
+
+That is a **10x improvement from a firmware change, not a hardware purchase** -
+overshoot every target and come back to it the same way, which is what a CMM
+and most machine tools do. It is the cheapest performance in the entire
+project and it was not previously written down anywhere.
+
+**Consequence 1 - the SPI encoder trigger is wrong.** `phase-plan.md` listed
+"12-bit becomes the accuracy floor" as the reason to buy AS5047P/MA732 at Phase
+3-4. Going 12-bit to 14-bit shrinks a 0.37 mm term to 0.09 mm while 4-6 mm
+terms sit untouched. The upgrade is still justified - by **read latency and the
+mux being a single point of failure** (D3, D7) - but not by accuracy. Buying
+encoders to fix a backlash problem is the expensive version of this mistake and
+is exactly what the budget exists to prevent.
+
+**Consequence 2 - the spec is restated.** Accuracy and repeatability are
+different numbers and the project was quoting one figure for both:
+
+| Metric | Target | Condition |
+| ------ | ------ | --------- |
+| Repeatability | **< 1.0 mm** | unidirectional approach, fixed payload, after warm-up |
+| Accuracy, uncalibrated | ~20 mm | do not quote this without the qualifier |
+| Accuracy, after kinematic calibration | goal < 5 mm | requires Phase 4 DH identification |
+
+Sub-millimetre *accuracy* was never achievable on printed reducers and claiming
+it would not have survived one question from anyone who has built an arm.
+Sub-millimetre *repeatability* is achievable and is the honest headline.
+
+**Consequence 3 - calibration is worth a phase, not an afternoon.** Six of the
+nine terms are systematic, which means repeatable, which means removable by a
+lookup table. The budget says calibration is worth ~22 % on its own and much
+more once windup is compensated from the pose-dependent gravity torque the
+model already computes.
+
+**The tradeoff, named.** This makes the README's headline number worse and its
+qualifiers longer. A spec with conditions attached looks less impressive than a
+bare number and is worth considerably more, because the bare number is the one
+that gets challenged.
+
+**Caveats.** Backlash (0.5 deg) and stiffness (300 N.m/rad) are the two largest
+inputs and both are currently *estimates* - the exact situation D15 exists to
+flag. Phase 1B measures both, and the budget is re-run that day. Encoder INL is
+a datasheet typical, not a measured value for this part.
+
+**Revisit when** Phase 1B produces measured backlash and stiffness. If measured
+backlash comes in under 0.2 deg the ranking changes and windup dominates alone.

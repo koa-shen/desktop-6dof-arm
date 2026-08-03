@@ -104,13 +104,30 @@ These map to what robotics R&D roles actually screen for.
    does, not just the recipe.
 2. **System modeling** - first/second-order response, time constants, damping
    ratio. Your step-response plots are the data; learn to read them.
-3. **Feedforward** - PID reacts to error; feedforward prevents it. Gravity
-   compensation is the intuitive first example.
-4. **State-space and LQR** - the vocabulary of modern control. Worth knowing
-   even if you never implement it here.
+3. **System identification** - going the other way: from the step response and
+   the ring-down back to the plant parameters. This is the skill that turns
+   `joint_sim.py`'s estimated stiffness into a measured one, and it is
+   underrepresented in hobby projects and expected in industry.
+4. **Model validation** - stating the disagreement between model and hardware as
+   a number, and knowing which discrepancies matter. See
+   [simulation-plan.md](simulation-plan.md) S4.
+5. **Feedforward** - PID reacts to error; feedforward prevents it. Gravity
+   compensation is the intuitive first example, and the model you validated in
+   step 4 is what supplies the feedforward term.
+6. **State-space and LQR** - the vocabulary of modern control. **Read about it;
+   do not implement it here yet.** It needs a validated plant model, which is
+   what 3 and 4 produce. Deferred to Phase 7 by D16.
+
+Items 3 and 4 are the deliberate insertion. The conventional list jumps from PID
+straight to LQR, which is how people end up with a controller they cannot
+explain running on a plant they never measured. Being able to say "my model
+predicted 180 ms settling and the hardware did 205 ms, and here is why" is a
+better interview answer than naming a controller.
 
 Resource: Brian Douglas's control lectures, then Åström & Murray's
-*Feedback Systems* (free PDF).
+*Feedback Systems* (free PDF). For system ID specifically, search
+"log decrement damping ratio" and "least squares parameter estimation robot
+dynamics".
 
 ### Kinematics and dynamics
 1. Rotation representations: matrices, Euler angles, quaternions. Know why
@@ -149,15 +166,24 @@ What actually moves a hiring conversation, roughly in order of impact:
    step response settling in 180 ms with 8 % overshoot" beats any adjective.
    Every phase in [phase-plan.md](phase-plan.md) exits with numbers - collect
    them.
-2. **Plots.** Commanded vs measured, error over time, step response. Generated
+2. **A validated model.** One plot with commanded, simulated and measured on the
+   same time axis and the residual underneath, plus a table of agreement across
+   several manoeuvres. This is the rarest item on the list at this level and the
+   one that most directly signals "can be trusted with a real system" - because
+   it states how wrong the model is instead of hoping nobody asks. See
+   [simulation-plan.md](simulation-plan.md).
+3. **Plots.** Commanded vs measured, error over time, step response. Generated
    automatically by `scripts/analyze_log.py`.
-3. **A failure you diagnosed.** Pick the hardest bug you hit, write it up:
+4. **A failure you diagnosed.** Pick the hardest bug you hit, write it up:
    symptom, hypotheses, how you discriminated between them, root cause, fix.
    This is the single most convincing artifact an early-career engineer can
    produce, because it demonstrates method rather than luck.
-4. **Design tradeoffs, documented.** Why AS5600 + mux and not SPI encoders? Why
+5. **Design tradeoffs, documented.** Why AS5600 + mux and not SPI encoders? Why
    belt reduction and not cycloidal? Why did you migrate off the Uno?
-5. **A 60-second video** of the arm doing the task, in the README.
+6. **A 60-second video** of the arm doing the task, in the README.
+
+Notably absent: a list of control techniques implemented. "I implemented LQR"
+invites "on what model?", and there is no good answer to that without item 2.
 
 Keep `docs/test-results/` and a running `docs/design-decisions.md` from day one.
 Reconstructing them later is miserable and the details that make you sound

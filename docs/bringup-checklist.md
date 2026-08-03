@@ -4,6 +4,11 @@ Work top to bottom. **Do not skip a step because the previous one "probably
 works."** Each app isolates one failure domain, which is the whole reason they
 are separate. Write the result of each gate in `docs/test-results/`.
 
+This file is the electrical gate sequence.
+[build/phase-1-first-joint.md](build/phase-1-first-joint.md) is the physical
+build that goes with it - parts, tools, mechanical assembly, and the decisions
+that have to close during Phase 1.
+
 Find your COM port first:
 
 ```powershell

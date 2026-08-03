@@ -3,6 +3,19 @@
 Each phase has an **exit criterion** that is a measurement, not a feeling. Do
 not start the next phase until you can quote the number.
 
+This file says *what* and *how well*. The **how** - parts, tools, assembly
+order, open decisions, and phase-specific failure modes - is in
+[build/README.md](build/README.md). The **proof** - simulation fidelity and the
+test harness - is in [simulation-plan.md](simulation-plan.md) and
+[test-plan.md](test-plan.md).
+
+**Precedence rule (D16):** when validation work and control sophistication
+compete for the same evening, validation wins. A PID whose behaviour is
+predicted by a model to within a stated percentage is a stronger result than an
+LQR on a plant nobody has characterised. Control theory beyond PID +
+feedforward is explicitly **deferred until the sim-to-real gap is a published
+number** (S4 of [simulation-plan.md](simulation-plan.md)).
+
 ---
 
 ## Phase 0 - Software ready (do this now, before hardware)
@@ -27,7 +40,15 @@ not start the next phase until you can quote the number.
 
 **Goal:** one joint you can trust and describe quantitatively.
 
-Follow [bringup-checklist.md](bringup-checklist.md).
+Follow [bringup-checklist.md](bringup-checklist.md) for the electrical gates and
+[build/phase-1-first-joint.md](build/phase-1-first-joint.md) for the parts,
+tools, mechanical assembly, and the decisions that must close here.
+
+Phase 1 has two stages that are easy to conflate: **1A** is the bench, direct
+drive, `GEAR_RATIO = 1.0`, proving electronics; **1B** is the first printed
+cycloidal joint with the encoder on the output, proving the mechanism. Do 1A
+first - it is the only configuration where an electrical fault and a mechanical
+fault cannot be mistaken for each other.
 
 **Exit:**
 - Return-to-home repeatability, in degrees, over 20+ cycles
@@ -40,6 +61,8 @@ Follow [bringup-checklist.md](bringup-checklist.md).
 ## Phase 2 - Closed-loop single joint
 
 **Goal:** the joint corrects its own error.
+
+Build guide: [build/phase-2-closed-loop.md](build/phase-2-closed-loop.md).
 
 - Tune PID; capture step responses at 3 different step sizes
 - Add soft limits and an encoder-loss fault that disables the driver
@@ -56,18 +79,26 @@ Follow [bringup-checklist.md](bringup-checklist.md).
   an afternoon; finding it on the bench costs an evening and a screaming motor.
 - Gains are in the **encoder-count domain, units of 1/s** - gear-ratio
   independent. `app_05_closed_loop` converts on the way in.
+- **Scope: stop at PID plus velocity and gravity feedforward.** Not because
+  anything fancier is beyond reach, but because the interesting result here is
+  *the model agreeing with the bench*, and swapping the controller mid-
+  validation destroys the comparison. Feedforward is in scope because it is what
+  the model directly justifies. Anything past that is Phase 7 material.
 
 **Exit:** step-response table (rise time, overshoot %, settling time, steady-
 state error) for at least three setpoints, plus a written explanation of which
 gain you changed and why. Compare the measured table against
 `tools/joint_sim.py`'s prediction and explain any disagreement - that is how the
-model's stiffness and damping estimates get corrected.
+model's stiffness and damping estimates get corrected. **The comparison is the
+exit criterion, not the tuning.**
 
 ---
 
 ## Phase 3 - Two joints, coordinated
 
 **Goal:** more than one axis moving at once - where real problems start.
+
+Build guide: [build/phase-3-multi-joint.md](build/phase-3-multi-joint.md).
 
 - Second encoder on mux channel 1; second driver
 - Generalize the firmware from one joint to a joint array - `app_06_multi_joint`
@@ -175,7 +206,9 @@ The host stack exists and runs without hardware:
   cannot reach the place point without wrapping J1 past its limit. Sweeping
   candidate pick points showed z = 0.05 m puts J2 on its -135 deg limit and
   fails outright - reachable is not the same as plannable.
-- URDF model + RViz/Gazebo visualization matching the real arm - **not started**
+- URDF model + RViz/Gazebo visualization matching the real arm - **not started**;
+  planned as stage S0/S6 of [simulation-plan.md](simulation-plan.md), where the
+  URDF is *generated* from `tools/arm_model.py` rather than hand-written (D14)
 - Pick-and-place demo: move a payload across the desk, repeatably. The dry run
   currently plans an eight-waypoint cycle in ~21 s of motion.
 - The gripper (9 g servo on a printed rack and pinion, D6/D11) is open loop with
@@ -214,10 +247,64 @@ when each one becomes blocking:
 | 1 | none | bench PSU, Uno, and one driver cover it |
 | 2 | endstops + e-stop | before the joint can hurt something |
 | 3 | **Teensy 4.1** + driver board | Uno tops out ~5 kHz aggregate = 56 deg/s for *one* geared joint |
-| 3-4 | **SPI encoders** | the day the first cycloidal reducer goes in; 12-bit becomes the accuracy floor |
+| 3-4 | **SPI encoders** | read latency and the mux single point of failure - **not** accuracy; see D17 |
 | 5 | CAN or integrated actuators | >8 wires crossing a joint, which motors-in-joints reaches fast |
 | 6 | host computer | ROS 2, planning, perception |
 
 The cycloidal decision (D2) pulled the Teensy and the SPI encoders **one phase
 earlier** than a direct-drive arm would need them, because 20:1 multiplies step
 demand by 20 and drops output resolution below what a 12-bit encoder can see.
+
+---
+
+## Simulation and validation (priority track)
+
+Runs alongside every phase above, is mostly **not gated on hardware**, and
+**outranks the optional parts of Phases 4-6** when time is short. Per D16, this
+is where effort goes before any control law more sophisticated than PID plus
+feedforward.
+
+| Stage | What | Needs hardware? |
+| ----- | ---- | --------------- |
+| S0 | URDF generated from `tools/arm_model.py`, cross-checked in Drake and MuJoCo | no |
+| S1 | Kinematic twin - animate `pick_place.py`'s plan, detect self-collisions | no |
+| S2 | Dynamic twin - reproduce D10's control-law results in a multibody model | no |
+| S3 | `SimTransport` - one script drives sim and hardware interchangeably | no |
+| S4 | **Validation - measure the sim-to-real gap and report it as a number** | Phases 1-2 |
+| S5 | Firmware-in-the-loop - the shipped control law against the simulated plant | host compiler |
+| S6 | ROS 2 / `ros2_control` / MoveIt, if it earns its place | Phase 6 |
+
+**S4 is the gate.** Nothing in Phase 7 starts until S4 produces its table. The
+system-ID measurements S4 depends on - link masses, reducer stiffness, damping,
+backlash, friction, efficiency, loop jitter - total under a day of bench time
+and are the cheapest credibility in the project.
+
+Detail and reasoning in [simulation-plan.md](simulation-plan.md) (D14, D15).
+The harness that runs all of it - test pyramid, CI, requirements traceability,
+fault injection - is in [test-plan.md](test-plan.md).
+
+---
+
+## Phase 7 - Advanced control (deferred, deliberately)
+
+Not a to-do list. A holding pen, so that ideas that arrive mid-Phase-2 get
+written down instead of acted on.
+
+| Idea | What it would need first |
+| ---- | ------------------------ |
+| State-space / LQR on a joint | a validated 2nd-order plant model - i.e. S4 |
+| Computed-torque / inverse-dynamics control | measured link inertias, not CAD estimates |
+| Backlash compensation | backlash measured under load, not just statically |
+| Friction feedforward (Stribeck) | the constant-velocity sweeps in the S4 system-ID set |
+| Disturbance observer | a trusted model of what "no disturbance" looks like |
+| Impedance / admittance control | torque sensing or current sensing, which does not exist yet |
+
+The pattern in every row is the same: **each one requires a model that S4
+produces.** That is not a coincidence, and it is the actual argument for doing
+validation first rather than a matter of taste. Attempting any of these on
+estimated parameters produces a controller that works on one build of one joint
+and cannot be explained - the opposite of the goal.
+
+If one of these is attempted anyway, it goes on a branch, and the acceptance
+test is beating the Phase 2 PID on the *same* step-response table. "It feels
+smoother" is not a result.

@@ -4,9 +4,12 @@ Firmware and tooling for a ground-up desktop robotic manipulator. Built as a
 phase-gated learning project: each phase ends with a measured number, not a
 vibe.
 
-**Start here → [docs/bringup-checklist.md](docs/bringup-checklist.md)** when
-hardware arrives.
-**Start here → [docs/learning-roadmap.md](docs/learning-roadmap.md)** until then.
+**Start here → [docs/build/README.md](docs/build/README.md)** for what to buy,
+what tools you need, and how to assemble each phase.
+**Start here → [docs/bringup-checklist.md](docs/bringup-checklist.md)** on the
+day hardware arrives.
+**Start here → [docs/simulation-plan.md](docs/simulation-plan.md)** for the work
+that needs no hardware at all.
 
 ---
 
@@ -170,11 +173,21 @@ arrives - see [docs/bringup-checklist.md](docs/bringup-checklist.md).
 
 ## Docs
 
-- [Bring-up checklist](docs/bringup-checklist.md) - the arrival-day runbook
-- [Design decisions](docs/design-decisions.md) - arm topology, transmission, and why
+**Planning**
 - [Phase plan](docs/phase-plan.md) - phases 0-6 with exit criteria
+- [Design decisions](docs/design-decisions.md) - arm topology, transmission, and why
 - [Learning roadmap](docs/learning-roadmap.md) - what to study and what to build for a robotics career
+
+**Doing**
+- [Build guides](docs/build/README.md) - parts, tools, assembly, open decisions, per phase
+- [Bring-up checklist](docs/bringup-checklist.md) - the arrival-day runbook
 - [Troubleshooting](docs/troubleshooting.md) - symptom-first debugging
 - [TMC2209 setup](docs/tmc2209-setup.md) - microstepping and current setting
+
+**Proving**
+- [Simulation plan](docs/simulation-plan.md) - fidelity ladder, stack choice, the digital twin
+- [Test plan](docs/test-plan.md) - test pyramid, CI, requirements traceability, fault injection
+
+**Reference**
 - [Wiring](hardware/pinouts/uno-tmc2209-as5600-tca9548a.md)
 - [BOM](hardware/bom/bom.md)
