@@ -496,3 +496,271 @@ first links are printed and weighed.
 remains valid for comparing designs at equal sample count, which is all the
 split study needs, but it must not be quoted as the arm's workspace volume. The
 tool now prints a convergence table and warns when the estimate has not settled.
+
+---
+
+## D9 - Homing: absolute, from the output encoder, with no homing move
+
+**Decision.** The arm does **not** home by driving to a limit switch. On power-up
+each joint reads its AS5600 once, resolves that reading into the range
+[-180, +180) degrees, applies a per-joint commissioning offset
+(`JOINT_HOME_OFFSET_DEG`), and declares itself homed. No motion, no switches, no
+sequence.
+
+**Why this is available at all.** The AS5600 is an *absolute* encoder mounted on
+the **output** side of the reducer (D4). It knows where the joint is before the
+motor has ever moved. A homing move exists to convert an incremental sensor into
+an absolute one; there is no incremental sensor here, so there is nothing to
+convert.
+
+**What it buys.**
+- A crash or a power cut is recoverable by cycling power, not by re-homing a
+  possibly-collided arm through an unknown path.
+- No limit switches: six switches, six wires, six pins, and six things to
+  debounce that the Uno does not have to spare.
+- Startup is instant, which matters more than it sounds when bring-up means
+  power-cycling forty times an evening.
+
+**The subtlety that bit us.** A raw AS5600 read is 0-4095, i.e. 0 to 360 deg. A
+joint parked at -30 deg reads 330. Fed straight into a soft-limit check against
+`JOINT_MIN_DEG = -135`, that is an instant `FAULT_SOFT_LIMIT` on a joint that is
+nowhere near its limit. `AS5600Encoder::homeAbsolute()` therefore resolves the
+first sample by choosing turn number -1 when the wrapped angle exceeds 180. Every
+subsequent read is unwrapped relative to that, so multi-turn tracking still
+works.
+
+**The cost, and it is real.** Absolute homing is only as good as the offset
+table. `JOINT_HOME_OFFSET_DEG` has to be measured once per assembly, per joint,
+and re-measured whenever a magnet, a hub, or an encoder board is disturbed.
+Commissioning procedure: jog the joint to a known mechanical reference, send
+`z` (`CMD_ZERO_HERE`), read back the offset, write it into
+`include/joint_config.h`. That is a manual step a limit switch would have
+automated. It is worth it, but it is a step that must be documented rather than
+remembered.
+
+**Revisit when** a joint can turn more than one output revolution. Absolute
+homing then genuinely cannot recover the turn count and something else -
+a multi-turn encoder, a switch, or a mechanical hard stop - has to supply it.
+No joint on this arm exceeds 300 degrees of travel, so it does not apply yet.
+
+---
+
+## D10 - Control law: feedforward first, PID as a trim, deadband to stop the buzz
+
+**Decision.** The joint servo loop is
+
+```
+step_rate = vel_ff * steps_per_count * vel_ff_scale     (MODE_TRACK only)
+          + PID(setpoint - measured) * steps_per_count
+```
+
+with a **2-count deadband** around the setpoint and **Ki = 0**. Gains are
+defined in the **encoder-count domain** with units of 1/s.
+
+**Why feedforward carries the move and PID only trims it.** A stepper is a rate
+source. Layer 1 already knows the velocity its trajectory implies at every
+instant, so handing that velocity straight to the driver means the feedback term
+only has to correct what the model got wrong - friction, gravity sag, gearbox
+windup - rather than generate the whole motion. `tools/joint_sim.py` measures
+the difference on a modelled J3 (0.041 kg.m^2, 1.96 N.m gravity, 300 N.m/rad
+reducer, 0.5 deg backlash, 0.5-count encoder noise):
+
+| Case | Overshoot | Settle | Reversals/s at rest |
+| ---- | --------- | ------ | ------------------- |
+| A step setpoint, PID only, no deadband | 16.0 % | 1.37 s | **83** |
+| B step setpoint, PID + 2-count deadband | 16.0 % | 1.37 s | 0 |
+| C profiled setpoint + feedforward + deadband | **1.0 %** | **0.93 s** | 0 |
+| D as C, plus Ki = 4 | 1.1 % | 0.93 s | 0 |
+
+Feedforward turns a 16 % overshoot into 1 %, and settles a third faster. Nothing
+about the gains changed.
+
+**Why Ki stays 0.** Case D is the experiment. Integral action buys nothing
+measurable here because the plant has no steady-state error to remove: a stepper
+holds position with detent and holding torque, so once the setpoint is reached
+the error is already inside the encoder's resolution. What integral action *does*
+have is a state that keeps growing while the joint is stuck in backlash or
+against a soft limit, and then discharges as a lurch. `PID_INTEGRAL_LIMIT`
+exists to bound that if it is ever enabled, and `JointController` now actually
+calls `setIntegralLimit()` - it did not before, which made the limit decorative.
+
+**Why the deadband, and why 2 counts.** One AS5600 count is 0.088 deg. At 20:1
+and 8 microsteps that is **7.81 microsteps**. Without a deadband the controller
+chases a target it can only resolve to within eight steps, and the encoder's own
+noise floor is enough to keep it commanding a reversal every 12 ms:
+
+| Deadband | Degrees | Reversals/s at rest | Steady-state error |
+| -------- | ------- | ------------------- | ------------------ |
+| 0 counts | 0.000 | **83** | 0.00 deg |
+| 1 count | 0.088 | 0 | -0.02 deg |
+| 2 counts | 0.176 | 0 | 0.06 deg |
+| 3 counts | 0.264 | 0 | 0.01 deg |
+| 5 counts | 0.439 | 0 | 0.00 deg |
+
+That is the whole tradeoff, and it is not a subtle one: the deadband is free.
+One count already silences it; 2 is chosen for margin against a noisier magnet
+than the model assumes. Above ~3 counts the band exceeds the encoder resolution
+by enough that it becomes the dominant accuracy term, so it does not go higher.
+Inside the band the controller calls `PidController::trackMeasurement()` rather
+than simply skipping the update, so the derivative term does not see a
+discontinuity when the joint leaves the band again.
+
+**Why the gains live in the count domain.** `PID_KP` was previously "steps/s per
+degree" in `app_05_closed_loop` and "1/s in the count domain" inside
+`JointController` - the same constant meaning two different things, differing by
+a factor of `STEPS_PER_OUTPUT_DEG`. A 1-count error commanded 3.5 deg/s in one
+and 0.025 deg/s in the other. The count domain is now canonical because it is
+**gear-ratio independent**: change `GEAR_RATIO` and `steps_per_count` absorbs it,
+leaving the gains valid. `app_05` multiplies by `STEPS_PER_OUTPUT_DEG` on the way
+in and prints the same units it accepts.
+
+**The gain that does not matter, which is the surprising result.** With
+feedforward doing the work, sweeping Kp from 2 to 64 changes peak following
+error by less than 0.03 deg:
+
+| Kp | Peak following error | Hunt (pk-pk at rest) |
+| -- | -------------------- | -------------------- |
+| 2 | 0.088 deg | 0.008 deg |
+| 8 | 0.105 deg | 0.008 deg |
+| 64 | 0.112 deg | 0.008 deg |
+
+So do not tune Kp for tracking. `PID_KP = 8` is chosen low deliberately: the
+modelled first torsional mode of the reducer is ~14 Hz, and a high-gain loop on
+a compliant drive is how a joint learns to sing. Tune Kp only if disturbance
+rejection is measurably poor, and expect to find that the answer is a stiffer
+gearbox rather than a bigger number.
+
+**Trajectory limits are not free parameters.** The planner's limits must sit
+below what the driver can deliver:
+`MAX_SPEED_STEPS_PER_SEC / STEPS_PER_OUTPUT_DEG` = 1600 / 88.9 = **18 deg/s**,
+and 4000 / 88.9 = **45 deg/s^2**. `TRAJ_MAX_VEL_DEG_S` was originally 30, above
+that ceiling; the loop saturated and produced 1.6-3.4 deg of following error that
+read exactly like bad tuning. It is now 15 and 40. **Re-derive both whenever
+`GEAR_RATIO` or `MICROSTEPS` changes** - they do not scale on their own.
+
+**Caveat on the model.** Reducer stiffness (300 N.m/rad) and damping (15 % of
+critical) are estimates, not measurements. Measure them before treating the
+absolute numbers as more than a ranking: hang a known mass and read the encoder
+deflection for stiffness; tap the link and count the ring-down for damping. The
+*ordering* of the four cases is robust to those numbers; the settling times are
+not.
+
+---
+
+## D11 - Gripper: open loop, compliant, and honest about it
+
+**Decision.** A 9 g hobby servo on a printed rack and pinion, with **compliant
+TPU fingers**, driven open loop. No encoder, no current sensing, no grasp
+detection. Grip force is set by finger stiffness multiplied by commanded
+overtravel: `GRIPPER_GRIP_DEG` (100) closes past `GRIPPER_CLOSED_DEG` (85), and
+those 15 degrees of interference are what squeezes the object.
+
+**Why compliance instead of feedback.** A rigid gripper on a position-controlled
+servo has exactly one correct closure angle per object, and being 1 mm wrong
+either drops the object or stalls the servo. A compliant finger converts
+position error into force error along a gentle slope, so a single "grip"
+command works across a range of object sizes. That is a mechanism solving a
+controls problem, which is the cheaper trade every time it is available.
+
+**What this explicitly cannot do.** There is no way to know whether the grasp
+succeeded. `pick_place.py` commands the gripper and waits
+`travel/slew + settle_ms`; "gripped" means "long enough has passed that the
+servo must have finished", not "an object is held". Detecting a failed grasp
+needs current sensing on the servo or a camera, and neither exists. This is
+written down rather than discovered later, because the failure mode is an arm
+that confidently places nothing.
+
+**Timer1 and the step generator.** The Arduino `Servo` library claims Timer1 on
+the ATmega328P and its ISR fires every 20 ms. That ISR runs while
+`StepperDriver::run()` is trying to meet step deadlines, and the resulting jitter
+is visible as roughness at high step rates. `ServoGripper` therefore **detaches
+the servo when idle** (`GRIPPER_DETACH_IDLE`), which stops the ISR entirely
+between commands. The cost is that a detached servo does not resist an external
+push, so an object can be worked loose by inertia during a fast move. If that
+shows up on the bench, the fix is to keep it attached while carrying and accept
+the jitter - not to remove the detach entirely.
+
+`ServoGripper::update()` slews the commanded angle at `GRIPPER_SLEW_DEG_S`
+rather than jumping, and contains no `delay()`. A blocking gripper move would
+stall three step generators for a quarter of a second.
+
+**Revisit when** there is a reason to know whether the grasp worked. The cheapest
+honest upgrade is a current-sense resistor on the servo supply; the useful one is
+a camera, which is a different project.
+
+---
+
+## D12 - Host link: COBS + CRC-8 framing, and the bandwidth that points at CAN
+
+**Decision.** `app_08_host_link` speaks a framed binary protocol at
+**500 000 baud**, not CSV at 115200. Wire format:
+
+```
+COBS( type | node | payload | crc8 ) 0x00
+```
+
+**Why not CSV.** CSV is for a human reading a scroll, and the bench apps keep
+using it. It is unusable for driving a control loop: there is no way to
+resynchronize after a dropped byte, no way to detect a corrupted field, and an
+8-byte command becomes ~30 bytes of ASCII plus a float parse on a 16 MHz AVR.
+All three become the bottleneck the moment a host streams setpoints at 200 Hz.
+
+**Why COBS.** Consistent overhead byte stuffing removes every zero byte from the
+frame, which frees `0x00` to mean exactly one thing: end of frame. A receiver
+that gets lost scans forward to the next zero and is synchronized. Overhead is
+one byte per frame plus one per 254 - constant and known, unlike escape-based
+schemes whose worst case doubles the frame length.
+
+**Why CRC-8 as well as the UART's own framing.** A UART framing error catches a
+lost bit boundary; it does not catch a bit flipped by a stepper's commutation
+transient coupling into an unshielded USB cable a hand's width away. That is the
+corruption that actually happens on this bench. The CRC is computed table-free -
+eight shifts per byte is nothing next to the I2C read it shares a loop with, and
+a 256-byte table would be 12 % of the ATmega328P's RAM.
+
+**Why 500 000 baud.** One framed 8-byte payload is 13 bytes on the wire. Three
+joints in and three out at 200 Hz is 7.8 kB/s each way. A 115200 link carries
+11.5 kB/s *total*, so that traffic is 68 % of the link before any logging - and
+UART bandwidth is shared, not duplex-budgeted, in practice on a USB-serial
+bridge. At 500 kbaud the same traffic is 16 %.
+
+**And that is the argument for CAN, stated as a number.** Six joints at 200 Hz
+is 15.6 kB/s each way. That still fits 500 kbaud, but it is a single point of
+failure on a shared bus with no arbitration, no per-node addressing, and no
+priority. Classic CAN 2.0 at 1 Mbps carries the same traffic with hardware
+arbitration and an 8-byte frame that `JointCommand` and `JointState` were
+deliberately sized to fit (D7). **The protocol does not change when the
+transport does** - only the framing layer is discarded.
+
+**Status bits inside the fault byte.** `STATUS_IN_POSITION` lives in bit 6 of
+`JointState::fault` rather than in a new field, because there is no spare byte
+in an 8-byte CAN frame. Consequence: **test faults with
+`state.fault & kFaultMask`, never `state.fault != 0`**. Both the firmware and
+`tools/joint_link.py` have a unit test asserting exactly that, because it is the
+kind of mistake that produces a phantom fault only when the arm is working
+correctly.
+
+**Mirrored, not reimplemented.** `tools/joint_link.py` is a line-for-line mirror
+of `lib/JointNode/PacketFraming.h`, with a self-check that round-trips frames,
+verifies COBS overhead, and confirms that a single flipped bit is rejected. Two
+implementations of a wire protocol drift; a mirror plus a shared test suite is
+the cheapest defence available without a shared language.
+
+---
+
+## D13 - The Uno is out of RAM, and that is now a measurement
+
+`app_07_coordinated` - three joints, trajectory generation, gripper, and a CLI
+in one binary - uses **73.9 % of the ATmega328P's 2 KB** (1513 bytes) and 66.5 %
+of flash. `app_08_host_link`, which moves layers 1 and 2 to the host, uses
+57.1 % and 47.5 %.
+
+That is the D3/D7 argument stopping being a prediction. Three joints fit; six do
+not, and the headroom that remains is not enough for the fault handling, the
+logging, and the CAN driver that six joints would need. **The Uno is a bring-up
+platform, not the target.** The next controller is a Teensy 4.1 (or one MCU per
+joint node, per D7), and the split that makes that a port rather than a rewrite
+already exists in the layer boundary.
+
+Do not spend effort shrinking `app_07`. It has already done its job by producing
+this number.

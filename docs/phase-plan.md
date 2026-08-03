@@ -43,11 +43,25 @@ Follow [bringup-checklist.md](bringup-checklist.md).
 
 - Tune PID; capture step responses at 3 different step sizes
 - Add soft limits and an encoder-loss fault that disables the driver
-- Add homing: drive to a hard stop, or use the absolute encoder directly
+- Homing is **absolute from the output encoder** - no hard-stop drive, no limit
+  switch (D9). `AS5600Encoder::homeAbsolute()` resolves the first reading into
+  [-180, 180) and applies `JOINT_HOME_OFFSET_DEG`. The commissioning step is to
+  jog to a mechanical reference, send `z`, and write the offset into
+  `include/joint_config.h`.
+- Before touching the bench, run `python tools/joint_sim.py`. It models the
+  joint - stepper as a rate source, compliant reducer, backlash, step loss,
+  encoder quantisation and noise - and reproduces the failure this phase exists
+  to avoid: a naive PID reverses direction **83 times a second** at rest. A
+  2-count deadband takes that to zero (D10). Finding that in simulation costs
+  an afternoon; finding it on the bench costs an evening and a screaming motor.
+- Gains are in the **encoder-count domain, units of 1/s** - gear-ratio
+  independent. `app_05_closed_loop` converts on the way in.
 
 **Exit:** step-response table (rise time, overshoot %, settling time, steady-
 state error) for at least three setpoints, plus a written explanation of which
-gain you changed and why.
+gain you changed and why. Compare the measured table against
+`tools/joint_sim.py`'s prediction and explain any disagreement - that is how the
+model's stiffness and damping estimates get corrected.
 
 ---
 
@@ -61,14 +75,19 @@ gain you changed and why.
   which keeps the control loop transport-agnostic so the same code survives the
   move to CAN (D7)
 - Synchronized moves: both joints start and finish together (time-scaled, not
-  "run each to completion")
-- The Uno will run out of pins/RAM/step rate here. `multi_joint` already sits at
-  50 % RAM with three joints, which is the measurement that makes migrating to
-  an ESP32 or Teensy a legitimate engineering decision rather than a guess.
-  Documenting *why* is the valuable part.
+  "run each to completion"). `lib/Motion/MotionController.h` does this by
+  stretching every axis's trapezoid to the slowest axis's minimum duration, and
+  `app_07_coordinated` (env `coordinated`) is the bring-up app for it.
+- The Uno will run out of pins/RAM/step rate here, and now has: `multi_joint`
+  sits at 53 % RAM, and `coordinated` - three joints plus trajectory generation
+  plus the gripper plus a CLI - sits at **73.9 %** (D13). That is the
+  measurement that makes migrating to a Teensy a decision rather than a guess.
+  Documenting *why* is the valuable part. Do not spend effort shrinking
+  `app_07`; it has already done its job.
 
 **Exit:** straight-line-in-joint-space move where both axes arrive within
-tolerance simultaneously.
+tolerance simultaneously. `test/test_motion` asserts the arrival spread is
+within the jerk filter's tap count; the bench has to confirm it.
 
 ---
 
@@ -110,15 +129,28 @@ there measurably.
 
 **Goal:** motion that is smooth, bounded, and predictable.
 
-- Trapezoidal and S-curve (jerk-limited) profiles
-- Joint-space vs Cartesian-space interpolation, and when each is wrong
-- Multi-joint synchronization with velocity/accel limits per joint
+The generator exists: `lib/ArmMath/Trajectory.h` (trapezoid + duration
+stretching + cross-axis synchronization) and `lib/Motion/MotionController.h`
+(setpoint stream, boxcar jerk limiter, velocity feedforward), mirrored on the
+host by `tools/trajectory.py`. What remains is meeting the real arm.
+
+- Trapezoidal is done; S-curve is approximated by a boxcar filter over the
+  trapezoid, which is cheap and bounds jerk without a third integration. Decide
+  whether that is good enough by looking for ringing at the reducer's first
+  torsional mode.
+- **Trajectory limits are not free parameters.** They must sit under
+  `MAX_SPEED_STEPS_PER_SEC / STEPS_PER_OUTPUT_DEG` (18 deg/s at 20:1) and
+  `ACCEL_STEPS_PER_SEC2 / STEPS_PER_OUTPUT_DEG` (45 deg/s^2). Planning above
+  the ceiling saturates the loop and produces following error that reads
+  exactly like bad tuning (D10). Re-derive both when `GEAR_RATIO` changes.
+- Joint-space vs Cartesian-space interpolation, and when each is wrong. Today
+  everything is joint-space, so the tool traces an arc between waypoints.
 - Gravity compensation feedforward using measured link masses - the model in
   `tools/arm_model.py` already computes gravity torque per joint; replace its
   estimated masses with weighed ones
 
 **Exit:** the tool traces a straight line in space with bounded deviation you
-can plot.
+can plot. Cartesian interpolation is the missing piece for this.
 
 ---
 
@@ -126,15 +158,35 @@ can plot.
 
 **Goal:** something a hiring manager can watch and understand.
 
-- Host-side control node (Python, or ROS 2 if you want the resume line)
-- URDF model + RViz/Gazebo visualization matching the real arm
-- Pick-and-place demo: move a payload across the desk, repeatably
-- The gripper (9 g servo on a printed rack and pinion, D6) and the state machine
-  that runs the task. It is not a kinematic joint, so it needs no encoder, no
-  PID, and no mux channel - but note `Servo` claims Timer1 on the ATmega328P.
+The host stack exists and runs without hardware:
+
+| Piece | File | State |
+| ----- | ---- | ----- |
+| Layer 0 firmware, no CLI | `src/apps/app_08_host_link.cpp` | builds, 57 % RAM |
+| Wire protocol | `lib/JointNode/PacketFraming.h` + `tools/joint_link.py` | self-checks pass both sides |
+| Layer 1 profiles | `tools/trajectory.py` | 13 self-checks pass |
+| Layer 2 task | `tools/pick_place.py` | full cycle plans and runs in `--dry-run` |
+
+- Host-side control node: `pick_place.py --port COM5` streams `MODE_TRACK`
+  setpoints at 200 Hz over COBS/CRC-8 framing at 500 kbaud (D12).
+- **Branch selection is a whole-path problem.** The planner searches every
+  feasible IK branch of the first waypoint and chains from each, because a plan
+  that greedily picks the nearest branch commits to a configuration family that
+  cannot reach the place point without wrapping J1 past its limit. Sweeping
+  candidate pick points showed z = 0.05 m puts J2 on its -135 deg limit and
+  fails outright - reachable is not the same as plannable.
+- URDF model + RViz/Gazebo visualization matching the real arm - **not started**
+- Pick-and-place demo: move a payload across the desk, repeatably. The dry run
+  currently plans an eight-waypoint cycle in ~21 s of motion.
+- The gripper (9 g servo on a printed rack and pinion, D6/D11) is open loop with
+  compliant TPU fingers. `ServoGripper` slews without blocking and detaches when
+  idle so its Timer1 ISR stops jittering step generation. **Grasp success is not
+  observable** - the task waits long enough that the servo must have finished,
+  which is not the same as knowing an object is held.
 
 **Exit:** a 60-second video, a README with real numbers, and a repo someone can
-clone.
+clone. Plus a repeatability figure: run the same cycle 20 times and measure the
+spread at the place point.
 
 ---
 

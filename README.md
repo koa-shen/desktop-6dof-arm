@@ -22,16 +22,19 @@ lib/
   Control/          PID with anti-windup, derivative-on-measurement
   SerialCli/        tiny non-blocking line reader
   JointNode/        per-joint command/state structs + transport-agnostic loop
+  Motion/           multi-axis trajectory streaming with velocity feedforward
+  Gripper/          open-loop servo gripper, non-blocking slew
 src/apps/           one firmware app per bring-up step (see below)
 test/               unit tests (host or on-target)
 scripts/            serial logging + log analysis (Python)
-tools/              design analysis: kinematics, torque, workspace (Python)
+tools/              design analysis + host control stack (Python)
 docs/               checklists, phase plan, troubleshooting, roadmap
 hardware/           wiring maps and BOM
 ```
 
-`scripts/` talks to the board. `tools/` never does - it sizes the arm before
-there is anything to talk to.
+`scripts/` talks to the board for logging. `tools/` is both the design analysis
+that sizes the arm before there is anything to talk to, and the host half of the
+control stack that drives it once there is.
 
 ## The apps
 
@@ -47,6 +50,8 @@ isolates a different failure domain so a problem tells you exactly where to look
 | `calibration` | Direction sign, true steps/degree, backlash | yes |
 | `closed_loop` | PID position control with a live-tuning serial CLI | yes |
 | `multi_joint` | Three joints closed-loop in one binary, synchronized | yes |
+| `coordinated` | Trajectory-generated synchronized moves + gripper, CLI | yes |
+| `host_link` | The arm as a device: binary link, host does IK and planning | yes |
 
 ```powershell
 pio run -e i2c_scan -t upload
@@ -95,11 +100,13 @@ each other by flat name, so **run them from inside `tools/`**.
 | `torque_budget.py` | what reach and payload can a printed 20:1 cycloidal actually hold up? |
 | `kinematics.py` | FK, analytic Jacobian, closed-form IK (8 branches), all cross-checked |
 | `workspace.py` | where can the tool reach, and where is it near-singular? |
+| `joint_sim.py` | will this control law hunt, and by how much? (plant model) |
 
 ```powershell
 cd tools
 python kinematics.py     # self-checks: DH vs PoE, analytic vs numeric J, IK round-trip
 python workspace.py      # reach, dead zone, singularity census, link split study
+python joint_sim.py      # step responses, gain sweep, deadband sweep
 ```
 
 `kinematics.py` validates itself three ways rather than trusting one
@@ -108,8 +115,41 @@ analytic Jacobian against finite differences, and `FK(IK(pose)) == pose` over
 500 random poses. The third check is what caught a sign error in $\theta_2$
 caused by the UR convention's negative $a_2$/$a_3$.
 
+`joint_sim.py` models the joint the firmware actually drives - stepper as a rate
+source, compliant reducer, backlash, step loss, encoder quantisation and noise -
+and runs the real control law against it. It is how the control law was chosen
+rather than guessed: a naive PID reverses direction 83 times a second at rest,
+and a 2-count deadband takes that to zero (D10).
+
 Conclusions from these live in
-[docs/design-decisions.md](docs/design-decisions.md) (D8, D8a, D8b).
+[docs/design-decisions.md](docs/design-decisions.md) (D8, D8a, D8b, D10).
+
+## Host control stack
+
+Three layers (D7): the Uno runs the servo loops, the host runs everything above
+them. Flash `host_link`, then drive it from Python.
+
+| Script | Layer | Runs without hardware |
+| ------ | ----- | --------------------- |
+| `trajectory.py` | 1 - trapezoid profiles, sync, jerk limiting | yes, self-checks |
+| `joint_link.py` | transport - COBS + CRC-8 framing at 500 kbaud | yes, self-checks |
+| `pick_place.py` | 2 - IK, branch selection, task sequencing | yes, `--dry-run` |
+
+```powershell
+cd tools
+python trajectory.py                  # 13 profile/sync self-checks
+python joint_link.py                  # protocol self-check, no port needed
+python pick_place.py --verbose        # plan and run a full cycle, no hardware
+
+pio run -e host_link -t upload
+python joint_link.py --port COM5      # live state at 1 Hz
+python pick_place.py --port COM5      # for real
+```
+
+`joint_link.py` is a line-for-line mirror of
+[lib/JointNode/PacketFraming.h](lib/JointNode/PacketFraming.h); both sides have
+tests asserting the same properties, because two implementations of a wire
+protocol drift.
 
 ## Tests
 
