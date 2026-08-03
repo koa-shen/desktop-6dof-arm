@@ -266,7 +266,7 @@ feedforward.
 
 | Stage | What | Needs hardware? |
 | ----- | ---- | --------------- |
-| S0 | URDF generated from `tools/arm_model.py`, cross-checked in Drake and MuJoCo | no |
+| S0 | URDF generated from `tools/arm_model.py`, cross-checked in Drake and MuJoCo | no - **generator done**, engines pending |
 | S1 | Kinematic twin - animate `pick_place.py`'s plan, detect self-collisions | no |
 | S2 | Dynamic twin - reproduce D10's control-law results in a multibody model | no |
 | S3 | `SimTransport` - one script drives sim and hardware interchangeably | no |

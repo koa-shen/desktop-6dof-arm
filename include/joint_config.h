@@ -70,6 +70,14 @@ constexpr float PID_INTEGRAL_LIMIT = 50.0f;
 constexpr float POSITION_TOLERANCE_DEG = 0.3f;
 constexpr uint16_t CONTROL_PERIOD_MS = 5;  // 200 Hz control loop
 
+// How far the MEASURED angle may sit outside a soft limit before it faults.
+// The limit fault triggers on measured position, not on the commanded target:
+// a setpoint that saturates against a limit is normal, whereas a joint that
+// has physically left its range has been backdriven or has slipped, and that
+// is the event worth stopping for. This margin keeps encoder noise and the
+// resting position after a clamp from tripping it. 1 count = 0.088 deg.
+constexpr uint16_t SOFT_LIMIT_MARGIN_COUNTS = 12;  // ~1.05 deg
+
 // In-position deadband, in ENCODER COUNTS. 1 count = 0.088 deg = 8 microsteps
 // at 20:1, so the loop can command a correction eight times finer than the
 // smallest error it can measure. Below this width the error sign flips on

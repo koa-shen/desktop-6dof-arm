@@ -187,7 +187,6 @@ arrives - see [docs/bringup-checklist.md](docs/bringup-checklist.md).
 **Proving**
 - [Simulation plan](docs/simulation-plan.md) - fidelity ladder, stack choice, the digital twin
 - [Test plan](docs/test-plan.md) - test pyramid, CI, requirements traceability, fault injection
-
 **Reference**
 - [Wiring](hardware/pinouts/uno-tmc2209-as5600-tca9548a.md)
 - [BOM](hardware/bom/bom.md)

@@ -75,6 +75,9 @@ class StepperDriver {
   bool run() {
     if (!enabled_) return false;
 
+    // Unsigned subtraction is modular, so this stays correct across the ~71
+    // minute micros() rollover. Do not "fix" it with a now < last branch;
+    // that is what actually breaks it.
     const unsigned long now = micros();
     float dt = (now - lastUpdateUs_) * 1e-6f;
     lastUpdateUs_ = now;

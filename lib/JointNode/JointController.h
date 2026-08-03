@@ -43,6 +43,10 @@ class JointController {
     float vel_ff_scale;          // 1.0 = trust the model; trim after measuring
     float integral_limit;        // count-seconds, anti-windup
     uint8_t in_position_counts;  // deadband half-width, encoder counts
+    // How far the MEASURED position may sit outside a soft limit before it is
+    // a fault. Non-zero because the joint legitimately rests a little past a
+    // limit after clamping, and because encoder noise should not trip a stop.
+    uint16_t limit_margin_counts;
     float home_offset_deg;       // mechanical angle that is joint zero (D4)
     bool absolute_home;          // true = homed in begin(), no homing move
   };
@@ -106,6 +110,22 @@ class JointController {
       state_.fault |= jointnode::FAULT_COMMS;
     }
 
+    // Soft limits are checked on the MEASURED position, not on the command.
+    //
+    // Checking the command instead gets both halves wrong. A layer-1 setpoint
+    // that saturates one count past a limit is normal and must not drop the
+    // arm mid-move - that is a false positive. And a joint that is backdriven
+    // past its limit by gravity through a slipping reducer never issues an
+    // out-of-range command at all, so the real event goes undetected - that is
+    // a false negative, and it is the one that breaks hardware.
+    //
+    // This also has to run BEFORE `armed` is evaluated, or the fault set here
+    // would not disable the driver until the next cycle.
+    if (pos < cfg_.min_counts - (int32_t)cfg_.limit_margin_counts ||
+        pos > cfg_.max_counts + (int32_t)cfg_.limit_margin_counts) {
+      state_.fault |= jointnode::FAULT_SOFT_LIMIT;
+    }
+
     state_.vel_counts_s = static_cast<int16_t>(
         constrain((pos - state_.pos_counts) / dt, -32767.0f, 32767.0f));
     state_.pos_counts = pos;
@@ -137,10 +157,8 @@ class JointController {
     int32_t target = cmd_.target_counts;
     if (cmd_.mode == jointnode::MODE_HOLD) target = holdTarget_(pos);
 
-    if (target < cfg_.min_counts || target > cfg_.max_counts) {
-      state_.fault |= jointnode::FAULT_SOFT_LIMIT;
-      target = constrain(target, cfg_.min_counts, cfg_.max_counts);
-    }
+    // Clamping a command is saturation, not a fault - see the note above.
+    target = constrain(target, cfg_.min_counts, cfg_.max_counts);
 
     const int32_t err = target - pos;
     if (cfg_.following_err_max && labs(err) > cfg_.following_err_max) {

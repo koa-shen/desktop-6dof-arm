@@ -88,6 +88,7 @@ void setup() {
   cfg.vel_ff_scale = VEL_FF_SCALE;
   cfg.integral_limit = PID_INTEGRAL_LIMIT;
   cfg.in_position_counts = POSITION_DEADBAND_COUNTS;
+  cfg.limit_margin_counts = SOFT_LIMIT_MARGIN_COUNTS;
   cfg.absolute_home = ABSOLUTE_HOME;
 
   for (uint8_t i = 0; i < kNumJoints; ++i) {

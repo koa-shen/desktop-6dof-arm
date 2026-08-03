@@ -118,8 +118,7 @@ class AngleUnwrapper {
     return continuousDeg();
   }
 
-  float continuousDeg() const { return turns_ * 360.0f + last_; }
-  int32_t turns() const { return turns_; }
+  float continuousDeg() const { return turns_ * 360.0f + last_; }  int32_t turns() const { return turns_; }
   bool primed() const { return primed_; }
 
  private:

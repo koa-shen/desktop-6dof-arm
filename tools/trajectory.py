@@ -78,9 +78,17 @@ class TrapezoidProfile:
 
         # T = v/a + d/v  ->  v^2 - aTv + ad = 0. The smaller root is the one
         # that respects the acceleration limit.
+        #
+        # Written as 2ad / (aT + sqrt(disc)) rather than (aT - sqrt(disc)) / 2.
+        # Algebraically identical; numerically not. The textbook form subtracts
+        # two nearly equal numbers once the move is stretched past its minimum
+        # duration, which is what synchronization does to every axis but the
+        # slowest. Python floats hide it; the float32 firmware does not, and
+        # these two implementations have to agree. Mirrors ArmMath/Trajectory.h.
         a_t = self._accel * self._duration
         disc = max(a_t * a_t - 4.0 * self._accel * self._dist, 0.0)
-        self._cruise = 0.5 * (a_t - math.sqrt(disc))
+        denom = a_t + math.sqrt(disc)
+        self._cruise = (2.0 * self._accel * self._dist / denom) if denom > 0.0 else 0.0
         self._cruise = min(self._cruise, vmax)
         if self._cruise <= 0.0:
             self._cruise = self._dist / self._duration

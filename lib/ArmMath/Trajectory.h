@@ -66,10 +66,18 @@ class TrapezoidProfile {
 
     // Total time for a trapezoid is T = v/a + d/v. Solve for v given T; the
     // smaller root is the one that actually respects the acceleration limit.
+    //
+    // Written as 2ad / (aT + sqrt(disc)) rather than the textbook
+    // (aT - sqrt(disc)) / 2. The two are algebraically identical, but the
+    // textbook form subtracts two nearly equal numbers whenever the move is
+    // stretched well past its minimum duration - which is exactly what axis
+    // synchronization does to every axis except the slowest one. In float that
+    // cancellation eats most of the mantissa. This form never subtracts.
     const float aT = accel_ * duration_;
     float disc = aT * aT - 4.0f * accel_ * dist_;
     if (disc < 0.0f) disc = 0.0f;  // only reachable via float error at T = tMin
-    cruise_ = 0.5f * (aT - sqrtf(disc));
+    const float denom = aT + sqrtf(disc);
+    cruise_ = (denom > 0.0f) ? (2.0f * accel_ * dist_ / denom) : 0.0f;
     if (cruise_ > vmax) cruise_ = vmax;
     if (cruise_ <= 0.0f) cruise_ = dist_ / duration_;
 

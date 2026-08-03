@@ -13,6 +13,12 @@ Per D16, this work has **priority over control sophistication**: stages S0-S4
 are done before any control law beyond PID and feedforward is attempted, because
 every one of those techniques needs a plant model that S4 is what produces.
 
+**Status:** S0's generator exists - `sim/export_urdf.py` emits `sim/arm.urdf`
+from `tools/arm_model.py` and validates the generated chain against
+`tools/kinematics.py`'s FK over 500 random configurations, agreeing to 1e-16 m.
+What remains for S0 is loading it in Drake and MuJoCo and confirming both agree
+with the same reference.
+
 ---
 
 ## 1. What simulation is actually for here
