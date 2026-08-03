@@ -340,7 +340,8 @@ boundary that already exists rather than inventing one.
 
 **Decision.** Design to **400 mm reach** (base axis to flange, arm horizontal
 and fully extended) and **500 g payload at full extension**, with a printed
-gripper counted separately at ~120 g.
+gripper counted separately at ~120 g. *Superseded in part by D8b: 400 mm is the
+geometric sum; measured usable radial reach is 379 mm.*
 
 **Why not larger.** From `tools/torque_budget.py`, requiring a 1.5x design
 factor on the shoulder gearbox rating:
@@ -409,3 +410,89 @@ Only J2, J3 and J5 are sized by statics.
 
 **Revisit when** link masses are measured rather than estimated. Update
 `tools/arm_model.py` and re-run; every number above follows from it.
+
+### D8a - This spec is a phase, not a ceiling
+
+Machined gearboxes are a planned upgrade. The question that matters now is which
+parts of the design have to change when they arrive, and the answer is **only
+the joints**.
+
+| Payload | Shoulder | Link deflection | vs one encoder count |
+| ------- | -------- | --------------- | -------------------- |
+| 500 g | 4.26 N.m | 0.14 mm | 23 % |
+| 1000 g | 6.22 N.m | 0.19 mm | 31 % |
+| 2000 g | 10.14 N.m | 0.29 mm | 48 % |
+
+The 38x45x2.2 mm link section stays inside half an encoder count at **4x** the
+design payload. Structure, kinematics, DH table, and link lengths therefore need
+no revision when the drives improve - the arm scales by replacing gearboxes and
+motors inside an unchanged envelope. This is the payoff of the D5 fixed-envelope
+rule, and it is worth protecting: **keep the machined units on the same 42 mm
+face and the same output flange** so they are drop-in.
+
+**But machined drives alone buy nothing measurable.** Order-of-magnitude
+backlash, at the joint output:
+
+| Source | Backlash |
+| ------ | -------- |
+| Printed cycloidal, stainless rollers in bushings | ~0.3-1.0 deg |
+| Machined cycloidal | ~0.05-0.1 deg |
+| AS5600 quantisation | 0.088 deg |
+
+With printed drives the gearbox dominates the encoder by roughly 10x, so the
+AS5600 is the correct, cheap choice. With machined drives the two become
+comparable - and the encoder, which the controller cannot see past, becomes the
+limit. Spending funding on machined gearboxes while keeping a 12-bit encoder
+buys precision that nothing in the system can observe or act on.
+
+**So they are one purchase, not two.** Machined drives must be accompanied by a
+higher-resolution absolute encoder - 14-bit or better, and preferably SPI, which
+also retires the TCA9548A mux and its per-read latency. Reaching 0.1 mm at
+400 mm reach needs ~15 bits (see D3).
+
+Until then, `app_04_calibration`'s backlash measurement is the number that
+decides whether the upgrade is worth funding. Measure the printed drive first.
+
+### D8b - Reach is 379 mm usable, and the link split barely matters
+
+`tools/workspace.py` samples 20 000 configurations inside `JOINT_LIMITS_DEG`,
+runs FK on each, and takes the smallest singular value of the linear block of
+the Jacobian. Three results correct or qualify D8.
+
+**Reach.** D8 quoted 400 mm, which is the arithmetic sum
+$|a_2| + |a_3| + d_5 + d_6$. The measured maximum radial reach is **379 mm**.
+The gap is not joint limits - it is that the wrist offset $d_4 = 48$ mm and the
+final two links do not all project into the horizontal plane when the tool is
+pointed usefully. **Restate the spec as 400 mm geometric, 379 mm usable.** Do
+not lengthen the links to recover it: the missing 21 mm costs shoulder torque
+proportionally and buys reach only in poses where the tool points away from the
+work.
+
+Also measured: a **30 mm dead cylinder** about the base axis, smaller than $d_4$
+because J1 yaw plus wrist articulation lets the tool reach back inside; and a
+vertical span of **-264 to +484 mm**, the negative half of which is only usable
+if the arm is mounted at a table edge rather than on the surface.
+
+**Singularities.** 3.4 % of sampled poses fall below $\sigma_{min} = 0.02$,
+split shoulder 48 %, elbow 33 %, wrist 21 %. Shoulder dominance is the expected
+signature of the D1 offset wrist: the wrist-centre singularity that a spherical
+wrist concentrates at one point is spread into a region near the base axis
+instead. The practical consequence is that **the near-base region needs
+Cartesian-speed limiting, not the fully-extended region**, which is the opposite
+of the usual intuition.
+
+**Link split.** Holding $a_2 + a_3 = 316$ mm and sweeping the ratio from 0.67 to
+1.50 moves reachable volume by 3 % and shoulder torque by 5 %. Max reach does
+not move at all, because it depends only on the sum. **The split is a weak
+lever.** The model mildly prefers a shorter upper arm - it pulls the elbow motor
+inboard - but that is inside model error, and it is the reverse of UR5's 1.08.
+The disagreement is a modelling artefact: the elbow motor is treated as a point
+mass at $r = a_2$, while a real forearm carries more distributed mass than the
+model gives it. **Keep $a_2 = 168$, $a_3 = 148$ mm.** Revisit only after the
+first links are printed and weighed.
+
+**Method note.** The voxel-occupancy volume estimate is *not converged* at
+20 000 samples - it is still rising roughly linearly. 98 L is a lower bound. It
+remains valid for comparing designs at equal sample count, which is all the
+split study needs, but it must not be quoted as the arm's workspace volume. The
+tool now prints a convergence table and warns when the estimate has not settled.

@@ -143,16 +143,64 @@ class ArmModel:
         return load * link.length ** 3 / (3 * ei)
 
 
-def default_arm(reach: float, payload: float) -> ArmModel:
-    """Build a plausible arm scaled to a target reach.
+@dataclass(frozen=True)
+class DHParams:
+    """Standard (distal) Denavit-Hartenberg table for a UR-style 6R arm.
 
-    Link proportions follow the UR pattern: upper arm slightly longer than the
-    forearm, with a short wrist stack. Masses are estimates until parts exist.
+    Convention: T_i = Rz(theta_i) . Tz(d_i) . Tx(a_i) . Rx(alpha_i)
+
+    a2 and a3 are negative, matching the UR sign convention, so that positive
+    joint angles fold the arm the way the physical machine does.
+
+    d4 is the wrist offset. It is what makes this a NON-spherical wrist: the
+    last three axes do not meet at a point. Closed-form IK survives anyway
+    because J2, J3 and J4 are parallel - Pieper's parallel-axis branch. See D1.
     """
-    upper = 0.42 * reach
-    fore = 0.37 * reach
-    wrist = reach - upper - fore
 
+    d1: float = 0.110   # base plate to shoulder axis
+    a2: float = -0.168  # upper arm, shoulder to elbow
+    a3: float = -0.148  # forearm, elbow to wrist 1
+    d4: float = 0.048   # wrist offset (the non-spherical term)
+    d5: float = 0.048   # wrist 1 to wrist 2
+    d6: float = 0.036   # wrist 3 to tool flange
+
+    @property
+    def horizontal_reach(self) -> float:
+        return abs(self.a2) + abs(self.a3) + self.d5 + self.d6
+
+    def rows(self) -> list[tuple[float, float, float]]:
+        """(d, a, alpha) per joint, in order. theta is the variable."""
+        return [
+            (self.d1, 0.0, math.pi / 2),
+            (0.0, self.a2, 0.0),
+            (0.0, self.a3, 0.0),
+            (self.d4, 0.0, math.pi / 2),
+            (self.d5, 0.0, -math.pi / 2),
+            (self.d6, 0.0, 0.0),
+        ]
+
+
+# Joint travel limits, degrees. J6 is continuous but clamped for cable routing.
+JOINT_LIMITS_DEG = [
+    (-180.0, 180.0),
+    (-135.0, 135.0),
+    (-150.0, 150.0),
+    (-180.0, 180.0),
+    (-120.0, 120.0),
+    (-180.0, 180.0),
+]
+
+DH = DHParams()
+
+
+def arm_from_links(upper: float, fore: float, wrist: float,
+                   payload: float) -> ArmModel:
+    """Build an arm from explicit link lengths, with mass following length.
+
+    Use this rather than mutating an existing model's lengths: structural mass
+    is derived from length, so changing one without the other silently yields a
+    model that weighs the wrong amount.
+    """
     # Sized for stiffness, then cut back until deflection approaches the
     # encoder resolution. Anything stiffer is mass the shoulder pays for.
     section = Section(width=0.038, height=0.045, wall=0.0022)
@@ -160,7 +208,7 @@ def default_arm(reach: float, payload: float) -> ArmModel:
 
     return ArmModel(
         links=[
-            # J1 base yaw: contributes no gravity torque, length is the shoulder offset
+            # J1 base yaw carries no gravity torque; length is the shoulder offset
             Link("base", 0.0, 0.00, 0.65),
             Link("upper_arm", upper, struct * upper, 0.34, com_frac=0.45),
             Link("forearm", fore, struct * fore, 0.34, com_frac=0.45),
@@ -170,3 +218,14 @@ def default_arm(reach: float, payload: float) -> ArmModel:
         section=section,
         tool_mass=0.12,  # printed gripper + 9 g servo
     )
+
+
+def default_arm(reach: float, payload: float) -> ArmModel:
+    """Build a plausible arm scaled to a target reach.
+
+    Link proportions follow the UR pattern: upper arm slightly longer than the
+    forearm, with a short wrist stack. Masses are estimates until parts exist.
+    """
+    upper = 0.42 * reach
+    fore = 0.37 * reach
+    return arm_from_links(upper, fore, reach - upper - fore, payload)
