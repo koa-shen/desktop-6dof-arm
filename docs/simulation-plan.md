@@ -207,19 +207,31 @@ into engineering, and it is the part almost no portfolio project has.
 
 ### Parameters to measure, not assume
 
-| Parameter | Currently | Measurement | Effort |
-| --------- | --------- | ----------- | ------ |
-| Link masses, CoM | **estimated** in `arm_model.py` | kitchen scale + balance point on a knife edge | 20 min |
-| Reducer torsional stiffness | **estimated** 300 N·m/rad | hang known mass at known radius, read encoder deflection, $k = \tau/\Delta\theta$ | 20 min |
-| Damping ratio | **estimated** 15 % critical | tap test, log the ring-down, log-decrement | 20 min |
-| Backlash | **estimated** 0.5° | dial indicator (Phase 1B) | 30 min |
-| Coulomb + viscous friction | not modelled | constant-velocity sweeps at several speeds; intercept = Coulomb, slope = viscous | 1 h |
-| Gearbox efficiency | assumed 80 % | stall torque on a lever arm vs motor torque × ratio | 30 min |
-| Rotor inertia | catalogue | vendor spec is adequate | - |
-| Loop rate + jitter | assumed | GPIO toggle + logic analyser (Phase 3) | 30 min |
+The estimators are written and validated: `sim/sysid.py`. Every one of them is
+checked against synthetic data from `tools/joint_sim.py` with known ground
+truth, so any error left is in the *bench data*, not in the algebra. Run
+`python sim/sysid.py` for the validation report and the ordered bench plan.
+
+| Parameter | Currently | Measurement | Estimator | Effort |
+| --------- | --------- | ----------- | --------- | ------ |
+| Link masses, CoM | **estimated** in `arm_model.py` | kitchen scale + balance point on a knife edge | - | 20 min |
+| Reducer torsional stiffness | **estimated** 300 N·m/rad | hang known mass at known radius, $k = \tau/\Delta\theta$ | `stiffness_static()` | 20 min |
+| Damping ratio | **estimated** 15 % critical | tap test, log the ring-down at ≥ 270 Hz | `ring_down()` | 20 min |
+| **Joint inertia** | **estimated** from CAD | second ring-down with a known added mass | `inertia_from_added_mass()` | 20 min |
+| Backlash | **estimated** 0.5° | slow reversal, **axis vertical** (D18) | `backlash_hysteresis()` | 30 min |
+| Coulomb + viscous friction | not modelled | constant-velocity sweeps at several speeds | `friction_lsq()` | 1 h |
+| Gearbox efficiency | assumed 80 % | stall torque on a lever arm vs motor torque × ratio | - | 30 min |
+| Rotor inertia | catalogue | vendor spec is adequate | - | - |
+| Loop rate + jitter | assumed | GPIO toggle + logic analyser (Phase 3) | - | 30 min |
 
 Total: under a day of bench time, and it converts every simulation number in the
 repo from plausible to defensible.
+
+Two of these have a *procedure* that must be right or the number comes back
+confidently wrong rather than noisy - see D18. Backlash must be measured about
+a vertical axis, and stiffness must not be computed from a ring-down plus a CAD
+inertia. Both are demonstrated as failing self-checks in `sim/sysid.py` so the
+warnings cannot rot into folklore.
 
 ### The validation protocol
 

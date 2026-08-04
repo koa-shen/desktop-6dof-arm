@@ -96,13 +96,19 @@ class ArmModel:
         Only pitch joints are considered. For a UR-style arm, J1 rotates about a
         vertical axis and J4/J6 are roll axes along the arm, so gravity produces
         no moment about them in the nominal upright mounting.
+
+        `angles_deg[0]` is J1 (yaw) and is deliberately excluded from the
+        pitch accumulation rather than merely assumed to be zero - it used to be
+        summed in, which gave silently wrong torques the moment anyone swept the
+        base. Every caller happened to pass 0.0, so nothing caught it.
         """
         torque = 0.0
         cum_angle = 0.0
         x = 0.0  # horizontal distance from the joint under consideration
 
         for i, link in enumerate(self.links):
-            cum_angle += math.radians(angles_deg[i]) if i < len(angles_deg) else 0.0
+            if i > 0 and i < len(angles_deg):
+                cum_angle += math.radians(angles_deg[i])
             if i >= joint_index:
                 horiz_com = x + link.com * math.cos(cum_angle)
                 torque += link.mass * G * horiz_com
@@ -112,6 +118,25 @@ class ArmModel:
         if tip:
             torque += tip * G * x
         return torque
+
+    def potential_energy(self, angles_deg: list[float]) -> float:
+        """Gravitational PE of the whole chain, J. Only used to check torques.
+
+        Virtual work says tau_i = dU/dtheta_i, so differentiating this
+        numerically is a derivation-independent test of gravity_torque().
+        """
+        u = 0.0
+        cum_angle = 0.0
+        h = 0.0
+        for i, link in enumerate(self.links):
+            if i > 0 and i < len(angles_deg):
+                cum_angle += math.radians(angles_deg[i])
+            u += link.mass * G * (h + link.com * math.sin(cum_angle))
+            h += link.length * math.sin(cum_angle)
+        tip = self.payload + self.tool_mass
+        if tip:
+            u += tip * G * h
+        return u
 
     def worst_case_torque(self, joint_index: int, step_deg: int = 15) -> tuple:
         """Sweep reachable configurations and return (max torque, angles)."""
@@ -229,3 +254,48 @@ def default_arm(reach: float, payload: float) -> ArmModel:
     upper = 0.42 * reach
     fore = 0.37 * reach
     return arm_from_links(upper, fore, reach - upper - fore, payload)
+
+
+def _self_check() -> None:
+    arm = default_arm(reach=0.400, payload=0.5)
+
+    # Virtual work: tau_i = dU/dtheta_i. gravity_torque() is derived from
+    # horizontal moment arms and potential_energy() from vertical heights, so
+    # agreement between them is a real check and not a restatement.
+    for joint in (1, 2, 3):
+        for angles in ([0, 0, 0, 0], [0, -30, 45, 10], [0, 20, -60, 30],
+                       [0, -90, 90, 0]):
+            eps = 1e-6
+            hi = list(angles)
+            lo = list(angles)
+            hi[joint] += math.degrees(eps)
+            lo[joint] -= math.degrees(eps)
+            numeric = (arm.potential_energy(hi) - arm.potential_energy(lo)) / (2 * eps)
+            analytic = arm.gravity_torque(joint, angles)
+            assert abs(numeric - analytic) < 1e-4, (
+                f"joint {joint} at {angles}: {analytic:.6f} vs {numeric:.6f}")
+
+    # Yaw must not change any pitch-joint torque. This is the bug that was
+    # hiding behind every caller passing angles[0] = 0.
+    for yaw in (0.0, 37.0, -90.0, 180.0):
+        base = arm.gravity_torque(1, [0.0, -30.0, 45.0, 0.0])
+        rotated = arm.gravity_torque(1, [yaw, -30.0, 45.0, 0.0])
+        assert abs(base - rotated) < 1e-12, f"yaw {yaw} changed torque"
+
+    # Hanging straight down is a zero-torque configuration; horizontal is peak.
+    assert abs(arm.gravity_torque(1, [0, -90, 0, 0])) < 1e-9
+    assert arm.gravity_torque(1, [0, 0, 0, 0]) > arm.gravity_torque(1, [0, -45, 0, 0])
+
+    # Outboard joints can never carry more gravity load than inboard ones.
+    angles = [0, -20, 40, 15]
+    torques = [arm.gravity_torque(i, angles) for i in (1, 2, 3)]
+    assert torques[0] >= torques[1] >= torques[2], torques
+
+    print("arm_model self-checks passed")
+    print(f"  worst-case shoulder torque : "
+          f"{arm.worst_case_torque(1)[0]:.3f} N.m")
+    print(f"  moving mass                : {arm.moving_mass:.3f} kg")
+
+
+if __name__ == "__main__":
+    _self_check()

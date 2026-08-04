@@ -111,7 +111,7 @@ Build guide: [build/phase-3-multi-joint.md](build/phase-3-multi-joint.md).
   `app_07_coordinated` (env `coordinated`) is the bring-up app for it.
 - The Uno will run out of pins/RAM/step rate here, and now has: `multi_joint`
   sits at 53 % RAM, and `coordinated` - three joints plus trajectory generation
-  plus the gripper plus a CLI - sits at **73.9 %** (D13). That is the
+  plus the gripper plus a CLI - sits at **74.2 %** (D13, remeasured). That is the
   measurement that makes migrating to a Teensy a decision rather than a guess.
   Documenting *why* is the valuable part. Do not spend effort shrinking
   `app_07`; it has already done its job.

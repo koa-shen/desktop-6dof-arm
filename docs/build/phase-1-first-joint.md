@@ -158,6 +158,7 @@ the first one to be scrap.
 | Deburring tool, needle files, 400-800 grit | cleaning printed bores and pin seats |
 | Small torque driver (0.5-3 N·m) *nice to have* | consistent preload on the output bearing |
 | Kitchen scale, 1 g resolution | **weighing links and the assembly** - this feeds `tools/arm_model.py` |
+| **A known mass on a known radius** (a weighed steel block + printed arm) | doubles as the stiffness hang test *and* the added-inertia ring-down that separates $k$ from $J$ - see D18 |
 | Known masses (200 g, 500 g, 1 kg) | stiffness measurement and payload testing |
 | Fish scale or luggage scale | crude torque measurement on a lever arm |
 
@@ -220,6 +221,22 @@ finger pressure and no rock.
 
 ### Measuring backlash two ways, and why
 
+> **Fixture requirement, decided before you print the stand (D18).** Mount the
+> joint so its axis is **vertical** for this test, or counterbalance the link.
+> Backlash is only traversed when the transmitted torque changes *sign*, and a
+> gravity load larger than the friction keeps one tooth flank pressed for the
+> whole reversal. The gap then never opens. Simulated on this joint, 1.5 N·m of
+> gravity torque against 0.15 N·m of friction reports **0.04° of backlash when
+> the truth is 0.5°** - 89 % low, and repeatable to three digits. The
+> measurement does not get noisy as it fails, it gets confidently wrong.
+> `sim/sysid.py` self-check [7] reproduces it on demand.
+
+The manual push-both-ways procedure below is immune to this, because *you* are
+the reversing load and your hand easily out-torques gravity. The trap applies
+to the automated version - driving the joint back and forth and reading the
+hysteresis in the motor-vs-encoder twist - which is the one worth automating
+and therefore the one worth warning about.
+
 The `calibration` app reports backlash from the encoder. That number includes
 gearbox lost motion **and** encoder quantisation **and** any magnet hub slip.
 The dial indicator separates them:
@@ -241,6 +258,31 @@ $k = \tau / \Delta\theta$ in N·m/rad. `tools/joint_sim.py` currently *assumes*
 300 N·m/rad, and D10 explicitly flags that as an estimate rather than a
 measurement. Replacing it is a 20-minute job that makes every simulation result
 in the repo defensible.
+
+Then get stiffness a **second, independent way**, because two methods that
+agree are the only evidence that either is right. Displace the link and let it
+ring down while the motor holds; `sim/sysid.py`'s `ring_down()` returns the
+natural frequency and damping ratio from the decay.
+
+Do not stop there and compute $k = J\omega_n^2$ from the CAD inertia. A
+ring-down measures only the *ratio* $\omega_n = \sqrt{k/J}$, so that step
+launders the solid model's error - including whatever the real infill did -
+straight into the stiffness number, which D17 identifies as the single largest
+term in the error budget. Instead run the ring-down **twice**, the second time
+with a known mass bolted to the link, and solve for both:
+
+$$J = \frac{\Delta J\,\omega_2^2}{\omega_1^2 - \omega_2^2} \qquad k = J\omega_1^2$$
+
+That is `inertia_from_added_mass()`, it costs one extra 20-minute test, and it
+yields a measured inertia as a bonus. If the added mass does *not* lower the
+frequency it is not rigidly coupled and the run is void - the function raises
+rather than returning a number. If the hang test and the ring-down disagree by
+more than ~20 %, suspect the bench plate rather than the gearbox: you are
+measuring the two compliances in series.
+
+Log the decay at **≥ 270 Hz** (20× the predicted 13.6 Hz mode). The 200 Hz
+control loop is adequate for control and marginal for identification, so use a
+dedicated fast logging app rather than `app_05`.
 
 ---
 

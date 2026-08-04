@@ -91,7 +91,7 @@ jobs:
 
 Details that matter:
 
-- **Record RAM/flash per environment as a CI artifact.** D13's 73.9 % figure is
+- **Record RAM/flash per environment as a CI artifact.** D13's 74.2 % figure is
   a load-bearing measurement in the architecture argument; a job that prints it
   every commit turns it into a tracked trend instead of a one-off. Fail the
   build if any environment exceeds 85 % RAM.
@@ -137,14 +137,14 @@ column as phases close.
 | R-2 | Payload at full extension | 500 g | static hold test, 60 s, encoder drift < 1 count | T7 | |
 | R-3 | Pose repeatability | < 1 mm, unidirectional approach | 20-cycle return-to-place, dial indicator at the tool | T7 | |
 | R-3b | Pose accuracy, uncalibrated | budget predicts ~20 mm | `tools/error_budget.py` vs measured (D17) | T4 | |
-| R-4 | Joint backlash | ≤ 1.0° | `calibration` app + dial indicator | T7 | |
+| R-4 | Joint backlash | ≤ 1.0° | `calibration` app + dial indicator, **axis vertical** (D18) | T7 | |
 | R-5 | Shoulder gearbox design factor | ≥ 1.5× | `tools/torque_budget.py` with **weighed** masses | T4 | |
 | R-6 | Closed-loop overshoot | ≤ 5 % | step response, three sizes | T7 | |
 | R-7 | Multi-axis arrival spread | ≤ 20 ms | two-joint synchronised move | T5/T7 | `test_motion` asserts; bench pending |
 | R-8 | Fault response: soft limit, encoder loss, comms loss | driver disabled < 50 ms | deliberate fault injection | T6 | |
 | R-9 | E-stop | cuts VMOT, logic survives | pressed under load | T6 | |
 | R-10 | Host link headroom | ≤ 30 % of link bandwidth at 200 Hz | packet accounting | T2 | 16 % at 500 kbaud (D12) |
-| R-11 | Controller RAM headroom | ≤ 85 % | CI build artifact | T3 | 73.9 % on Uno (D13) |
+| R-11 | Controller RAM headroom | ≤ 85 % | CI build artifact | T3 | 74.2 % on Uno (D13 + soft-limit margin) |
 | R-12 | Sim-to-real agreement | within 20 % on six canonical manoeuvres | `sim/validate.py` | T5+T7 | |
 | R-13 | Task cycle repeatability | spread at place point over 20 cycles | pick-place demo | T7 | |
 

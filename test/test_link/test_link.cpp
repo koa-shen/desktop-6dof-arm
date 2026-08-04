@@ -24,6 +24,48 @@ static void test_crc_detects_single_bit_flips() {
   TEST_ASSERT_EQUAL_UINT8(good, link::crc8(data, 8));
 }
 
+// The host tool (tools/joint_link.py) and this firmware must produce byte-
+// identical frames, and the only way to be sure is to check BOTH against the
+// same third party rather than against each other. Round-trip tests cannot
+// catch the two implementations drifting together. These vectors are the
+// published CRC-8/ATM check value and the test vectors from Cheshire & Baker,
+// "Consistent Overhead Byte Stuffing"; joint_link.py asserts the same ones.
+static void test_crc_matches_published_check_value() {
+  // CRC-8/ATM: poly 0x07, init 0x00, no reflection, no final xor.
+  // CRC of the ASCII string "123456789" is 0xF4.
+  const uint8_t msg[9] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  TEST_ASSERT_EQUAL_UINT8(0xF4, link::crc8(msg, 9));
+}
+
+static void test_cobs_matches_reference_vectors() {
+  uint8_t enc[16];
+
+  const uint8_t v1[1] = {0x00};
+  const uint8_t e1[2] = {0x01, 0x01};
+  TEST_ASSERT_EQUAL_UINT8(2, link::cobsEncode(v1, 1, enc));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(e1, enc, 2);
+
+  const uint8_t v2[3] = {0x00, 0x11, 0x00};
+  const uint8_t e2[4] = {0x01, 0x02, 0x11, 0x01};
+  TEST_ASSERT_EQUAL_UINT8(4, link::cobsEncode(v2, 3, enc));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(e2, enc, 4);
+
+  const uint8_t v3[4] = {0x11, 0x22, 0x00, 0x33};
+  const uint8_t e3[5] = {0x03, 0x11, 0x22, 0x02, 0x33};
+  TEST_ASSERT_EQUAL_UINT8(5, link::cobsEncode(v3, 4, enc));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(e3, enc, 5);
+
+  const uint8_t v4[4] = {0x11, 0x22, 0x33, 0x44};
+  const uint8_t e4[5] = {0x05, 0x11, 0x22, 0x33, 0x44};
+  TEST_ASSERT_EQUAL_UINT8(5, link::cobsEncode(v4, 4, enc));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(e4, enc, 5);
+
+  const uint8_t v5[4] = {0x11, 0x00, 0x00, 0x00};
+  const uint8_t e5[5] = {0x02, 0x11, 0x01, 0x01, 0x01};
+  TEST_ASSERT_EQUAL_UINT8(5, link::cobsEncode(v5, 4, enc));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(e5, enc, 5);
+}
+
 static void test_cobs_round_trip_with_zeros() {
   // Zeros are the whole reason COBS exists: a JointCommand for a joint near
   // its origin is mostly zero bytes.
@@ -118,6 +160,8 @@ static void test_status_bits_are_not_faults() {
 static int runAll() {
   UNITY_BEGIN();
   RUN_TEST(test_crc_detects_single_bit_flips);
+  RUN_TEST(test_crc_matches_published_check_value);
+  RUN_TEST(test_cobs_matches_reference_vectors);
   RUN_TEST(test_cobs_round_trip_with_zeros);
   RUN_TEST(test_cobs_overhead_is_one_byte);
   RUN_TEST(test_frame_round_trip);

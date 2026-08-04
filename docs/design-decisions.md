@@ -759,6 +759,12 @@ in one binary - uses **73.9 % of the ATmega328P's 2 KB** (1513 bytes) and 66.5 %
 of flash. `app_08_host_link`, which moves layers 1 and 2 to the host, uses
 57.1 % and 47.5 %.
 
+> *Remeasured 2026-08-03:* `coordinated` is now **74.2 %** (1519 bytes) and
+> 66.8 %. The +6 bytes are three joints × one `uint16_t limit_margin_counts`,
+> added when the soft-limit check moved to measured position. Recorded because
+> a figure that only ever gets quoted and never re-measured stops being a
+> measurement - and the direction of travel is the whole point of D13.
+
 That is the D3/D7 argument stopping being a prediction. Three joints fit; six do
 not, and the headroom that remains is not enough for the fault handling, the
 logging, and the CAN driver that six joints would need. **The Uno is a bring-up
@@ -1019,3 +1025,79 @@ a datasheet typical, not a measured value for this part.
 
 **Revisit when** Phase 1B produces measured backlash and stiffness. If measured
 backlash comes in under 0.2 deg the ranking changes and windup dominates alone.
+
+---
+
+## D18 - Two system-ID experiments that fail silently, and how they are trapped
+
+**Date:** 2026-08-03
+**Status:** Accepted
+**Context:** Building `sim/sysid.py`, the estimator set for S4 and D15.
+
+Every estimator in `sim/sysid.py` is validated against synthetic data whose
+truth is known, on the principle that an estimator which cannot recover a
+parameter from clean simulated data has no business being pointed at a noisy
+bench. Writing those validations surfaced two experiments that return a
+plausible, repeatable, precise number that is simply wrong. Neither announces
+itself. Both are now demonstrated as passing self-checks rather than described
+as warnings, so they cannot quietly rot.
+
+**Finding 1 - a ring-down does not give stiffness.** It gives `omega_n` and
+`zeta`, and `omega_n = sqrt(k/J)`. Only the *ratio* is measured. The usual move
+is to substitute a CAD inertia and report `k = J*omega_n^2`, which silently
+imports the solid model's error - including any error in the printed parts'
+actual infill - into the stiffness number, and stiffness is the largest single
+term in the D17 error budget.
+
+The fix is the added-inertia method: measure `omega_n`, bolt on a *known* extra
+inertia `dJ`, measure again. Two equations, two unknowns:
+
+    J = dJ * w2^2 / (w1^2 - w2^2)        k = J * w1^2
+
+Neither depends on trusting CAD, and the static hang test gives a third,
+independent route to `k`. `inertia_from_added_mass()` also refuses a result if
+the added mass did not lower the frequency, which is the signature of a mass
+that is not rigidly coupled.
+
+**Finding 2 - backlash is invisible about a horizontal axis.** Backlash is only
+traversed when the transmitted torque *changes sign*. Torque reverses only if
+the direction-reversing load (friction) exceeds the constant load (gravity). On
+a gravity-loaded joint the same tooth flank stays pressed the entire time and
+the hysteresis gap never opens. Measured on the simulated joint against a fixed
+0.15 N.m of Coulomb friction, sweeping the gravity torque:
+
+| Gravity torque about the axis | Measured gap | True backlash |
+|---|---|---|
+| 0.00 N.m (vertical axis) | 0.540 deg | 0.5 deg |
+| 0.05 N.m | 0.319 deg | 0.5 deg |
+| 0.15 N.m (= friction) | 0.040 deg | 0.5 deg |
+| 1.50 N.m (horizontal J2) | 0.040 deg | 0.5 deg |
+
+The measurement does not get noisy as it fails, it gets *confidently wrong* -
+89 % low, and repeatable to three digits. A tidy number is not evidence.
+
+**Consequence.** The Phase 1B backlash test is performed with the joint axis
+**vertical**, or with the link counterbalanced. This is a fixture requirement,
+so it has to be known before the test stand is printed rather than discovered
+after. `docs/build/phase-1-first-joint.md` and the bench plan printed by
+`sysid.py` both carry it.
+
+**Also recorded:** log decrement assumes viscous damping, which decays
+exponentially, while Coulomb friction decays linearly. Fitting an exponential
+to a real reducer's ring-down over-reports `zeta` - measured at +37 % over 3
+cycles and +107 % over 10 in the validation - and the bias grows with the
+number of cycles fitted, which is the opposite of the usual instinct to use all
+the data. Fit early cycles at large amplitude and treat the result as an upper
+bound. The correction in `backlash_hysteresis()` likewise needs the friction at
+the *test speed*, since creeping too slowly sits in the pre-sliding regime
+where Coulomb friction is not fully developed.
+
+**The tradeoff, named.** Validating estimators against a simulator means they
+are only proven against the physics the simulator contains. `joint_sim.py` has
+no Stribeck curve, no temperature dependence and no position-dependent
+stiffness, so none of those can be caught this way. What this does buy is the
+elimination of every error of *procedure and algebra*, which is where these two
+findings lived, and it buys it before any hardware exists.
+
+**Revisit when** Phase 1B produces measured values and the bench data disagrees
+with the simulator in a way the estimators cannot explain.

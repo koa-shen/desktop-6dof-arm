@@ -3,8 +3,15 @@
 This is the Python mirror of lib/JointNode/PacketFraming.h and
 lib/JointNode/JointProtocol.h. The two files must agree exactly, so this one is
 written to look like the C++ rather than to look like idiomatic Python, and it
-carries a self-check that encodes known frames and compares against constants
-captured from the firmware's own encoder.
+carries a self-check that pins CRC-8 and COBS against **published reference
+vectors** - the CRC-8/ATM check value and the test vectors from the original
+COBS paper - rather than only round-tripping against itself.
+
+That distinction matters. A round-trip test proves this file is
+self-consistent, which it would still be if both halves drifted together and
+both stopped matching `lib/JointNode/PacketFraming.h`. Anchoring to an external
+standard means the firmware and this file are each checked against the same
+third party, so agreement between them is evidence rather than coincidence.
 
     python joint_link.py            # protocol self-check, no hardware needed
     python joint_link.py --port COM5  # ping the arm, print state at 1 Hz
@@ -365,6 +372,12 @@ def _self_check() -> bool:
 
     print("crc8")
     check("crc8(b'') == 0", crc8(b"") == 0)
+    # The published CRC-8/ATM check value: the CRC of the ASCII string
+    # "123456789" is 0xF4 for poly 0x07, init 0x00, no reflection, no final
+    # xor. This is what makes the test external rather than circular - it pins
+    # the polynomial and the init value against the standard, which is also
+    # what lib/JointNode/PacketFraming.h claims to implement.
+    check("CRC-8/ATM check value 0xF4", crc8(b"123456789") == 0xF4)
     # Single-bit flips must always change the CRC. This is the property the
     # link actually depends on; a specific magic value is not.
     base = bytes(range(8))
@@ -375,6 +388,18 @@ def _self_check() -> bool:
     check("every single-bit flip changes the crc", flips_caught)
 
     print("cobs")
+    # Reference vectors from Cheshire & Baker, "Consistent Overhead Byte
+    # Stuffing". Round-trip tests alone cannot catch an encoder and decoder
+    # that drifted together; these can.
+    for raw, expected in (
+            (b"\x00", b"\x01\x01"),
+            (b"\x00\x00", b"\x01\x01\x01"),
+            (b"\x00\x11\x00", b"\x01\x02\x11\x01"),
+            (b"\x11\x22\x00\x33", b"\x03\x11\x22\x02\x33"),
+            (b"\x11\x22\x33\x44", b"\x05\x11\x22\x33\x44"),
+            (b"\x11\x00\x00\x00", b"\x02\x11\x01\x01\x01")):
+        check(f"COBS reference vector {raw.hex()}",
+              cobs_encode(raw) == expected)
     for payload in (b"", b"\x00", b"\x01\x00\x02", bytes(20),
                     bytes(range(1, 60)), b"\x00" * 5 + b"\xff" * 5):
         check(f"round trip {payload[:8]!r}...",

@@ -5,7 +5,7 @@ things happen and they are easy to conflate:
 
 1. **A second joint** - coordination, synchronisation, and the fact that joint 2
    is a disturbance source for joint 1.
-2. **The Uno running out** - `coordinated` already measures 73.9 % RAM with three
+2. **The Uno running out** - `coordinated` already measures 74.2 % RAM with three
    joints (D13), and the step-rate ceiling binds before that. This is the phase
    where you migrate controllers.
 
@@ -175,7 +175,7 @@ swap barely touches the apps. Keep it that way. When you do swap:
 
 | ID | Decision | Trigger | What decides it |
 | -- | -------- | ------- | --------------- |
-| **P3-a** | **When to migrate off the Uno** | your measured step-rate ceiling | you now have the number. D13's 73.9 % RAM is the other half |
+| **P3-a** | **When to migrate off the Uno** | your measured step-rate ceiling | you now have the number. D13's RAM figure, now 74.2 %, is the other half |
 | **P3-b** | **Teensy 4.1 vs one MCU per joint (CAN)** | at migration time | D7 fixes the *layer boundaries*, not the silicon. Teensy first is strictly cheaper and the CAN split stays available |
 | **P3-c** | **Printer control board vs a hand-wired carrier** | when the third driver goes in | a board buys fusing, 24 V distribution and TMC UART; hand-wiring buys understanding and costs evenings |
 | **P3-d** | **SPI encoder swap now or at Phase 4** | third encoder or first reducer | already triggered. The question is only budget timing |
