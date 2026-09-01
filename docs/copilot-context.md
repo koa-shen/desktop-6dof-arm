@@ -10,8 +10,9 @@ Design and manufacture a desktop 6-DOF robotic manipulator arm and program it to
 - **Offset (non-spherical) wrist.** Chosen for buildability. Because J2/J3/J4
   are parallel, Pieper's criterion is still satisfied via the parallel-axis
   branch, so **closed-form IK is retained** - see `docs/design-decisions.md`.
-- **Every joint is NEMA 17 + printed cycloidal reducer**, target 20:1 to 40:1.
-  One joint module design, scaled to ~3 sizes.
+- **Every joint is NEMA 17 + printed cycloidal reducer** constrained to the
+  42 x 42 mm motor-face footprint. Ratio follows a feasible cycloid, bearing,
+  output-shaft, and clearance layout; the first prototype is 15:1-class (D19).
 - Encoder magnet on the **output** side of the reducer, so the reading includes
   gearbox backlash.
 

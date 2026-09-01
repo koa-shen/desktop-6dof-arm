@@ -37,7 +37,10 @@ so `Vref = I_rms * 1.41`. For 0.5 A RMS, set Vref ≈ 0.71 V.
 Procedure:
 1. Power VMOT, leave the motor connected but idle (driver enabled, not stepping).
 2. Measure DC volts between the trimpot wiper and GND.
-3. Turn the pot in small increments. Clockwise usually increases current.
+3. Turn the pot in small increments. Clockwise usually increases current. On the
+  current StepStick-style board, "tightening" the screw empirically increased
+  usable current; backing it out lowered torque margin and brought back
+  stutter near 1600 steps/s.
 4. Run `motor_test` and feel the motor after 2 minutes. Warm is fine, painful is
    not.
 

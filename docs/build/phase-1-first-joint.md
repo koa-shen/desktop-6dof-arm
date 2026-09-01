@@ -135,13 +135,13 @@ the first one to be scrap.
 
 | Qty | Part | Spec | Why |
 | --- | ---- | ---- | --- |
-| 2 | Cycloidal disc, printed | 20 lobes, 180° apart on the eccentric | one disc is inherently unbalanced |
-| 21 | Ring pin, **steel dowel** ⌀3 × 16 mm | h7 ground dowel, not cut rod | printed pins wear out in hours |
-| 21 | Needle roller sleeve (optional) | to suit the dowel | large efficiency gain; adds cost and stack height |
-| 1 | Eccentric input, printed or turned | on a 6902 or 6802 bearing | |
-| 1 | 6902ZZ or 6802ZZ bearing | eccentric ride | |
-| 4-8 | Output pin bearings, MR63/MR83 | output roller followers | |
-| 1-2 | Main output bearing, 6807 / 6810 / thin-section | carries the joint moment | **this bearing sets your joint stiffness** |
+| 2 | Cycloidal disc, printed | 4-5 mm thick; lobe count set by the 42 x 42 mm CAD layout | one disc is inherently unbalanced |
+| design-dependent | Ring pins, **steel dowel** | count and diameter must fit with wall and tool clearance | printed pins wear out in hours |
+| design-dependent | Needle roller sleeves (optional) | to suit the selected ring pin | large efficiency gain; adds stack height |
+| 1 | Eccentric input, printed or turned | start near 0.65 mm eccentricity; bearing selected from the CAD layout | |
+| 1 | Eccentric bearing | selected for the available radial and axial space | |
+| design-dependent | Output shafts | M3 shoulder bolts with 4 mm shoulders are the reference starting point | |
+| design-dependent | Output and main bearings | selected from the available footprint and required joint moment | **this bearing sets your joint stiffness** |
 | 1 | Output flange, printed | carries the AS5600 magnet hub | |
 | - | M3 SHCS assortment, 6-25 mm | | |
 | - | M3 heat-set inserts | printed threads strip | |
@@ -184,6 +184,24 @@ full disc prints. Do the same for the pin bores: print a strip of 21 pin
 pockets in 0.05 mm increments and find the one where the dowel slides in with
 finger pressure and no rock.
 
+### Footprint feasibility gate
+
+Before buying the bearing and pin set or printing a complete gearbox, make a
+dimensioned top-view CAD drawing with the 42 x 42 mm NEMA 17 face drawn around
+the complete mechanism. The disc diameter, ring pins, eccentric bearing, output
+shafts, output bearing, housing walls, fasteners, and assembly-tool access must
+all remain within it. Start from the demonstrated reference values: a
+15:1-class ratio, 0.65 mm eccentricity, 4-5 mm discs, and M3 shoulder bolts
+with 4 mm shoulders as output shafts. They are a starting hypothesis, not a
+validated parts list (D19).
+
+Print a single-disc, half-height coupon with the actual pin circle, output-pin
+pattern, and eccentric before the dual-disc housing. Confirm it turns smoothly
+through one input revolution with measurable nonzero clearance. Record the
+as-printed disc thickness, pin-pocket diameter, and actual eccentricity. A
+complete gearbox is authorized only after this coupon fits the footprint and
+turns by hand.
+
 ### Assembly, in order
 
 1. **Install heat-set inserts** in every printed part before assembly. Retro-
@@ -193,7 +211,7 @@ finger pressure and no rock.
 3. **Seat the ring pins** in the housing with the arbor press. All 21 must sit
    at the same height and stand perpendicular. Check with a straightedge across
    the top; any pin standing proud will foul the second disc.
-4. **Press the 6902 onto the eccentric**, then the disc onto the bearing. The
+4. **Press the selected bearing onto the eccentric**, then the disc onto the bearing. The
    disc should rotate on the bearing with light drag, no rock.
 5. **Assemble both discs 180° apart** on the eccentric. If your eccentric is a
    single lobe with a keyed hub, the two discs need a 180° index feature - if
@@ -211,7 +229,7 @@ finger pressure and no rock.
    the plastic dust afterwards - it is abrasive.
 9. **Move the magnet to the output flange.** This is D4 and it is the whole
    point: the encoder must read the joint, not the motor.
-10. **Set `GEAR_RATIO = 20.0`** in
+10. **Set `GEAR_RATIO` to the measured ratio** in
     [../../include/joint_config.h](../../include/joint_config.h), then
     **re-derive the trajectory ceilings** - `MAX_SPEED_STEPS_PER_SEC /
     STEPS_PER_OUTPUT_DEG` and `ACCEL_STEPS_PER_SEC2 / STEPS_PER_OUTPUT_DEG`.
@@ -294,7 +312,7 @@ reasoning, not just its answer.
 
 | ID | Decision | When it must be made | What decides it | Cost of deciding late |
 | -- | -------- | -------------------- | --------------- | --------------------- |
-| **P1-a** | **Cycloidal ratio per joint** (20:1 vs 26:1, and how many distinct ratios to design) | before printing the second joint | `tools/torque_budget.py` re-run with **weighed** link masses | every ratio is a separate print/tune cycle |
+| **P1-a** | **Cycloidal layout and ratio per joint** (starting with a 15:1-class, 42 x 42 mm footprint prototype) | before buying the complete reducer bearing/pin set | dimensioned footprint coupon plus `tools/torque_budget.py` re-run with **weighed** link masses | an infeasible bearing/pin layout forces a housing redesign |
 | **P1-b** | **Motor body length per joint** (23 / 40 / 60 mm) | before ordering motors 2-6 | same torque budget; D5's table is provisional | wrong motors are ~$15 each and a 2-week lead time |
 | **P1-c** | **Link lengths $a_2, a_3$** - currently 168 / 148 mm | before printing links | D8b says the split is a weak lever; the **sum** sets reach and shoulder torque | changing $a_2$ invalidates the DH table, the IK validation, and the workspace study |
 | **P1-d** | **Magnet hub retention** - press fit, CA bond, grub screw, or moulded-in | during 1B assembly | the two-way backlash measurement above | slip is indistinguishable from backlash until you check |
@@ -330,11 +348,11 @@ oversize), pin pockets misplaced by print shrinkage, or the disc's eccentricity
 does not match the eccentric you printed. Print a **single-disc, half-height
 test article** to iterate on this rather than a full gearbox.
 
-### It turns but the ratio is not 20:1
-Count it by hand: mark the input and output, turn the input 20 full revolutions,
-and see where the output lands. A cycloidal stage's ratio is (number of pins −
-number of lobes) based; if you printed 20 lobes and 20 pins instead of 21, the
-ratio is undefined and the thing will lock.
+### It turns but the ratio is not the CAD value
+Count it by hand: mark the input and output, then turn the input for the nominal
+number of full revolutions and see where the output lands. A cycloidal stage's
+ratio is set by the ring-pin and lobe counts; equal counts will lock. Do not
+enter a nominal ratio in firmware until this measurement agrees with the layout.
 
 ### Backlash is > 2° on the first assembly
 Expected (D2 predicts 0.5-2°). Attack in this order, measuring after each:

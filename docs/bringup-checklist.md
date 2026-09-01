@@ -92,6 +92,9 @@ Pass when:
 
 Record: Vref, measured current, max reliable speed (steps/s and RPM).
 
+2026-08-31 result: open-loop motor bench passed; see
+[test-results/2026-08-31-open-loop-motor-bench.txt](test-results/2026-08-31-open-loop-motor-bench.txt).
+
 ---
 
 ## Gate 4 - Calibration (`calibration`)

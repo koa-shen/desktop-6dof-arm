@@ -1,0 +1,53 @@
+2026-08-31 open-loop motor bench test
+
+Scope
+- Arduino Uno + one TMC2209 + one NEMA 17 stepper.
+- No mux, no encoder, no linkage, no reducer.
+- Firmware: motor_test, uploaded and verified on COM3.
+- Microstepping: 8x from joint_config.h.
+
+Wiring verified by behavior
+- STEP path works.
+- DIR path works.
+- EN path works.
+- Motor coil pairing supports smooth bidirectional motion.
+- Common ground and motor supply wiring are stable under motion.
+
+Power setup
+- Bench PSU: 12 V.
+- PSU current limit: about 1 A.
+- PSU remained stable in CV during motion.
+- Bulk capacitor installed across VMOT/GND at the driver.
+
+Driver current setup
+- Vref measurement point unresolved; no Vref pad on board.
+- Meter reading near 4.33 V did not behave like the actual Vref wiper.
+- Pot direction was identified empirically: tightening the screw increased usable current; backing it out lowered torque margin.
+- Final setting: just above the threshold where 1600 steps/s stopped stuttering.
+
+Firmware commands verified
+- e toggles enable.
+- f jogs +25 steps.
+- r jogs -25 steps.
+- Positive numeric jogs work.
+- Negative numeric jogs work after firmware fix.
+- c runs continuous forward.
+- v runs continuous reverse.
+- x stops continuous motion.
+
+Motion results
+- Positive steps rotated the bare motor counterclockwise when viewed from the shaft side.
+- Negative steps rotated the opposite direction.
+- Multi-thousand-step moves passed.
+- 900 steps/s: smooth.
+- 1066 steps/s: smooth.
+- 1600 steps/s: initially stuttered, then ran smoothly after tightening the pot.
+- 1600 steps/s at 8x microstepping = 1 motor rev/s = 60 rpm.
+- Slight chugging remains audible, but no skipped steps or harsh stutter after adjustment.
+
+Thermal result
+- Driver remained cold.
+- Motor remained cold.
+
+Conclusion
+PASS: first open-loop motor bench test complete. Proceed to reducer/linkage CAD and simulation workflow.

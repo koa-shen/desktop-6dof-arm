@@ -7,9 +7,10 @@
 //
 // Serial commands (type + Enter):
 //   e        toggle driver enable       +/-  speed up / down
+//   f/r      tiny forward/reverse jog
 //   <n>      jog n steps (e.g. 400, -400)
 //   x        stop                       ?    status
-//   c        continuous run toggle
+//   c/v      continuous forward/reverse
 //
 // PASS: smooth rotation, no skipped steps at target speed, driver warm but not
 // hot, motor holds position when stopped and enabled.
@@ -31,6 +32,23 @@ static float speed = 400.0f;  // steps/s
 static bool continuous = false;
 static int8_t continuousDir = 1;
 static uint32_t lastLogMs = 0;
+
+static void jogSteps(long steps) {
+  continuous = false;
+  if (!motor.isEnabled()) motor.enable(true);
+  motor.move(steps);
+  Serial.print(F("# jog "));
+  Serial.println(steps);
+}
+
+static void runContinuous(int8_t direction) {
+  continuous = true;
+  continuousDir = direction;
+  if (!motor.isEnabled()) motor.enable(true);
+  motor.setVelocity(speed * continuousDir);
+  Serial.println(direction > 0 ? F("# continuous forward")
+                               : F("# continuous reverse"));
+}
 
 static void printStatus() {
   Serial.print(F("# en="));
@@ -60,7 +78,8 @@ void setup() {
   Serial.print(STEPS_PER_OUTPUT_DEG, 3);
   Serial.println(F(" steps per output degree"));
   Serial.println(F("# driver starts DISABLED. type 'e' to enable."));
-  Serial.println(F("# keys: e=enable +/-=speed c=continuous x=stop ?=status"));
+  Serial.println(F("# keys: e=enable f/r=tiny jog +/-=speed"));
+  Serial.println(F("#       c/v=continuous fwd/rev x=stop ?=status"));
   Serial.println(F("# or type a step count: 400 / -400"));
 }
 
@@ -70,11 +89,15 @@ void loop() {
     if (line[0] == 'e') {
       motor.enable(!motor.isEnabled());
       Serial.println(motor.isEnabled() ? F("# ENABLED") : F("# disabled"));
-    } else if (line[0] == '+') {
+    } else if (line[0] == 'f') {
+      jogSteps(25);
+    } else if (line[0] == 'r') {
+      jogSteps(-25);
+    } else if (line[0] == '+' && line[1] == '\0') {
       speed = min(speed * 1.5f, MAX_SPEED_STEPS_PER_SEC);
       motor.setMaxSpeed(speed);
       printStatus();
-    } else if (line[0] == '-') {
+    } else if (line[0] == '-' && line[1] == '\0') {
       speed = max(speed / 1.5f, 10.0f);
       motor.setMaxSpeed(speed);
       printStatus();
@@ -83,19 +106,15 @@ void loop() {
       motor.emergencyStop();
       Serial.println(F("# stopped"));
     } else if (line[0] == 'c') {
-      continuous = !continuous;
-      if (!continuous) motor.stop();
-      Serial.println(continuous ? F("# continuous ON") : F("# continuous off"));
+      runContinuous(1);
+    } else if (line[0] == 'v') {
+      runContinuous(-1);
     } else if (line[0] == '?') {
       printStatus();
     } else {
       const long steps = atol(line);
       if (steps != 0) {
-        continuous = false;
-        if (!motor.isEnabled()) motor.enable(true);
-        motor.move(steps);
-        Serial.print(F("# jog "));
-        Serial.println(steps);
+        jogSteps(steps);
       }
     }
   }
@@ -103,12 +122,6 @@ void loop() {
   if (continuous) {
     if (!motor.isEnabled()) motor.enable(true);
     motor.setVelocity(speed * continuousDir);
-    // reverse every 2 s so it stays on the bench
-    static uint32_t lastFlipMs = 0;
-    if (millis() - lastFlipMs >= 2000) {
-      lastFlipMs = millis();
-      continuousDir = -continuousDir;
-    }
   }
 
   motor.run();

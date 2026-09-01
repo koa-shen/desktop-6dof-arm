@@ -35,14 +35,16 @@ D2 and D5.
 | 1 | TMC2209 | |
 | 1 | AS5600 + diametric magnet | on the reducer **output** shaft |
 | 2 | Cycloidal discs (printed) | 180 deg apart for balance |
-| ~21 | Steel dowel pins, ring gear | printed pins wear out fast |
-| ~21 | Needle roller sleeves (optional) | large efficiency gain over bare pins |
-| 1 | Eccentric bearing (6902/6802) | input eccentric |
-| 4-8 | Output roller bearings | output pin followers |
-| 1-2 | Main output bearing | thin-section or 6807/6810 |
+| design-dependent | Steel ring pins | count and diameter follow the 42 x 42 mm footprint layout; printed pins wear out fast |
+| design-dependent | Needle roller sleeves (optional) | selected to suit the ring pins; large efficiency gain over bare pins |
+| 1 | Eccentric bearing | selected from the 42 x 42 mm layout; start near 0.65 mm eccentricity |
+| design-dependent | M3 shoulder bolts, 4 mm shoulder | reference starting point for output shafts |
+| design-dependent | Output roller and main bearings | selected from the 42 x 42 mm footprint and joint moment requirement |
 
-Cycloidal ratio = number of lobes on the disc, with one more pin than lobes
-(20 lobes + 21 pins -> 20:1). Design two ratios at most, per the torque budget.
+Cycloidal ratio is set by the ring-pin and lobe counts. Start the first layout
+at 15:1-class, then accept only the ratio that fits the 42 x 42 mm NEMA 17 face
+footprint and meets the measured torque budget (D19). Do not order bearings or
+pins until the dimensioned layout and single-disc coupon pass.
 
 ### Motor length by joint (provisional)
 

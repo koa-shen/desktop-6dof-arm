@@ -85,7 +85,7 @@ not just editing a constant.
 
 | ID | Decision | Phase | Blocks |
 | -- | -------- | ----- | ------ |
-| P1-a | Cycloidal ratio per joint (20:1 / 26:1, how many distinct designs) | 1 | joints 2-6 |
+| P1-a | Cycloidal footprint layout and resulting ratio per joint | 1 | reducer parts and joints 2-6 |
 | P1-b | Motor body length per joint | 1 | ordering motors |
 | P1-c | Link lengths $a_2, a_3$ | 1 | DH table, IK validation, all of `tools/` |
 | P1-d | Magnet hub retention method | 1 | trusting the backlash number |

@@ -1101,3 +1101,61 @@ findings lived, and it buys it before any hardware exists.
 
 **Revisit when** Phase 1B produces measured values and the bench data disagrees
 with the simulator in a way the estimators cannot explain.
+
+---
+
+## D19 - Reducer footprint is the primary mechanical constraint
+
+**Date:** 2026-08-31
+**Status:** Accepted
+
+**Decision.** Each cycloidal reducer must fit within the 42 x 42 mm NEMA 17
+face footprint. The planar footprint, rather than a target ratio, is the
+controlling parameter for the reducer CAD. Cycloid diameter, eccentricity,
+disc thickness, output-shaft and bearing selection, ring-pin layout, and all
+printed clearances must be solved together inside that boundary.
+
+This supersedes D2's 20:1 to 40:1 target and D5's claim that ratio does not
+affect the envelope. The ratio is now an output of a workable layout and the
+measured torque budget, not an input selected independently.
+
+**Reference starting point, not a copied design.** A peer has demonstrated a
+compact NEMA 17 reducer using a nominal 15:1 stage, about 0.65 mm eccentricity,
+4-5 mm cycloidal discs, and M3 shoulder bolts with 4 mm shoulders as the output
+shafts. Sweep Dynamics demonstrates that a reducer can live within the NEMA 17
+face envelope. Neither reference proves the exact pin layout, bearing life,
+stiffness, efficiency, or torque capacity of this printed design.
+
+**Why.** Keeping the reducer inside the motor projection makes every joint a
+genuinely repeatable module: the motor flange defines the mounting datum and
+the reducer no longer widens the arm at each axis. It also exposes the actual
+engineering tradeoff early. A larger disc or more aggressive ratio can improve
+torque multiplication, but consumes radial room needed for pin walls, bearings,
+and clearance; a thicker disc improves bending stiffness but consumes axial
+stack height. There is no independent "gear ratio" decision once the envelope
+is fixed.
+
+**Phase 1B feasibility gate.** Before a complete reducer is printed, produce a
+dimensioned CAD layout and a single-disc coupon that prove all of the following:
+
+- the complete rotating and stationary mechanism remains inside the 42 x 42 mm
+  face projection;
+- disc thickness is 4-5 mm and eccentricity starts near 0.65 mm;
+- the selected M3 shoulder bolts, ring pins, eccentric bearing, and output
+  bearing have printable pockets, positive wall thickness, and assembly-tool
+  clearance;
+- the disc turns through a full input revolution by hand with the intended
+  print compensation and nonzero running clearance; and
+- the resulting ratio and the measured efficiency satisfy the torque budget for
+  the assigned joint.
+
+Record the as-built dimensions, nominal ratio, backlash, torsional stiffness,
+and efficiency with the Phase 1B results. A ratio below the prior 20:1 target
+is acceptable only if the measured motor-output torque still meets the design
+factor; otherwise the correct response is to revise the mechanical layout or
+the arm requirement, not silently assume a higher ratio will fit.
+
+**Consequences.** `GEAR_RATIO` remains a measured per-build firmware setting,
+so the trajectory ceilings and torque calculations must be re-derived after
+the mechanism is characterized. The first build is therefore a 15:1-class
+feasibility prototype, not a commitment to 15:1 for every joint.
