@@ -180,8 +180,8 @@ error of 0.1-0.2 mm lands directly on the output as backlash (D2).
 **Calibrate XY compensation before printing a disc.** Print a coupon with five
 20 mm bores at −0.1, −0.05, 0, +0.05, +0.1 mm offsets, measure with calipers,
 and derive the single number your printer needs. Doing this once saves three
-full disc prints. Do the same for the pin bores: print a strip of 21 pin
-pockets in 0.05 mm increments and find the one where the dowel slides in with
+full disc prints. Do the same for the pin bores: print a strip of the intended
+ring-pin pattern with pockets in 0.05 mm increments and find the one where the
 finger pressure and no rock.
 
 ### Footprint feasibility gate
@@ -207,9 +207,9 @@ turns by hand.
 1. **Install heat-set inserts** in every printed part before assembly. Retro-
    fitting one means disassembling the joint.
 2. **Deburr every bore.** The first layer's elephant foot on a pin pocket will
-   cock the dowel by a degree, and 21 cocked dowels is a gearbox that binds.
-3. **Seat the ring pins** in the housing with the arbor press. All 21 must sit
-   at the same height and stand perpendicular. Check with a straightedge across
+  cock a dowel by a degree, and a ring of cocked dowels is a gearbox that binds.
+3. **Seat the ring pins** in the housing with the arbor press. All must sit
+  ring pins must sit at the same height and stand perpendicular. Check with a straightedge across
    the top; any pin standing proud will foul the second disc.
 4. **Press the selected bearing onto the eccentric**, then the disc onto the bearing. The
    disc should rotate on the bearing with light drag, no rock.
@@ -222,7 +222,7 @@ turns by hand.
 7. **Turn it by hand before it ever sees a motor.** It should turn with steady,
    moderate resistance, all the way around, with no tight spot. A tight spot
    once per output revolution is a housing/bore concentricity problem; a tight
-   spot 20 times per output revolution is a lobe profile or pin spacing problem.
+  spot once per disc lobe is a lobe profile or pin spacing problem.
    **Do not power a gearbox that binds by hand.**
 8. **Grease lightly and run it in.** Motor at low speed, unloaded, both
    directions, 10-15 minutes. Expect the resistance to drop noticeably. Wipe out
@@ -322,9 +322,9 @@ reasoning, not just its answer.
 
 Two decisions people expect to make here and should **not**:
 
-- **Microstepping.** Decided: 8×. At 20:1 one microstep is 0.011° at the output
-  and the AS5600 resolves 0.088°, so more microsteps buy resolution nothing can
-  observe while multiplying step rate (D3).
+- **Microstepping.** Decided: 8×. At a 15:1 prototype one microstep is 0.015°
+  at the output and the AS5600 resolves 0.088°, so more microsteps buy
+  resolution nothing can observe while multiplying step rate (D3).
 - **Homing method.** Decided: absolute from the output encoder, no switches,
   no homing move (D9). The commissioning step is measuring
   `JOINT_HOME_OFFSET_DEG`, not choosing a strategy.
