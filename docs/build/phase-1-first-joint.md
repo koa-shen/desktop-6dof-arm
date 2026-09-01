@@ -175,7 +175,7 @@ error of 0.1-0.2 mm lands directly on the output as backlash (D2).
 | Infill | 40-60 % gyroid | |
 | Horizontal expansion / XY compensation | **calibrate it** | see below |
 | Orientation | discs flat, housing flat | layer planes perpendicular to the load |
-| Seam | random or aligned **away** from the lobes | a visible seam on a flank is a hard point |
+| Seam | **scarf (ramped), aligned to a root** - not random | see below; a vertical seam stack on a flank is a hard point |
 
 **Calibrate XY compensation before printing a disc.** Print a coupon with five
 20 mm bores at −0.1, −0.05, 0, +0.05, +0.1 mm offsets, measure with calipers,
@@ -183,6 +183,40 @@ and derive the single number your printer needs. Doing this once saves three
 full disc prints. Do the same for the pin bores: print a strip of the intended
 ring-pin pattern with pockets in 0.05 mm increments and find the one where the
 finger pressure and no rock.
+
+**Seam placement, specifically.** The disc profile is a closed curve and every
+point on it is a working surface, so "put the seam somewhere harmless" is not
+available - only "spread it out" and "put it where contact is lightest."
+
+- **Do not use a random seam here.** Random scatters a defect onto every lobe
+  flank. Aligned puts one defect on one lobe, which is a single once-per-disc-
+  revolution disturbance you can actually find in a telemetry trace.
+- **Use a scarf (ramped) seam, aligned to a root** rather than a flank. It
+  distributes the seam over a Z-ramp instead of stacking blobs.
+- **Check the scarf length against the lobe pitch.** On the reference layout the
+  profile perimeter is 109.3 mm over 15 lobes = **7.29 mm of arc per lobe**.
+  A default scarf length of ~10 mm therefore smears across more than a full
+  lobe. Shorten it, or accept that the ramp spans two lobes and know that is
+  what you chose.
+
+**Do not sand the lobe flanks.** Sand the flat faces, deburr the bores, clean
+up the elephant's foot - all of that is good and reduces the face rub that the
+efficiency model in `tools/cycloidal_layout.py` explicitly does not include.
+But the flank profile is dimension-critical and hand sanding is blind: it
+removes material where you happen to press, and you cannot measure the result.
+The cost is quantified - `backlash_deg()` gives **0.066° per 0.01 mm** of flank
+removal, so **0.15 mm consumes the entire R-4 budget of 1.0° on its own**, and
+casual sanding removes that much easily.
+
+The right tools for flank finish are the two the process already gives you:
+XY compensation, which is *measurable* with calipers, and the run-in step in
+assembly, which is self-lapping and therefore wears the high spots exactly
+where the load path actually touches. Also note that mirror-smooth is not the
+goal - in boundary lubrication a little roughness retains grease, and smooth
+PETG on smooth PETG galls more readily, not less.
+
+If you sand anything, **wash the parts** (soap, water, full dry) before
+greasing. PETG dust is abrasive and grease turns it into lapping compound.
 
 ### Footprint feasibility gate
 
