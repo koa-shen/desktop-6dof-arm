@@ -28,13 +28,13 @@ without it.
 
 | Tool | Rough cost | Notes |
 | ---- | ---------- | ----- |
-| Digital multimeter | $20-40 | DC volts + continuity is the whole requirement |
-| Digital calipers, 0.01 mm | $25 | |
+| Digital multimeter | have | pointed and alligator-clip probes; DC volts + continuity is the whole requirement |
+| Digital calipers, 0.01 mm | have | |
 | Feeler gauge set | $10 | magnet gap, repeatably |
 | Ceramic/plastic trimmer tool | $5 | a steel screwdriver on a Vref pot shorts it to the pad |
-| M3 hex drivers / 2.5 mm keys | $15 | |
-| Wire strippers | $15 | |
-| Soldering iron + solder + flux | $40 | also drives heat-set inserts |
+| M3 hex drivers / 2.5 mm keys | verify | M3 fastener kit is on hand; confirm the matching drivers/keys are included |
+| Wire strippers | have | |
+| Soldering iron + solder + flux | have | also drives heat-set inserts |
 | 3D printer | have (P1S) | |
 
 ### Blocking, Phase 1B (the reducer)

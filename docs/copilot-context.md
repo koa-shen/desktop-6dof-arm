@@ -37,12 +37,20 @@ Design and manufacture a desktop 6-DOF robotic manipulator arm and program it to
   earlier than a direct-drive design would need it.
 
 ## Available tools/supplies
-- Bambu P1S (ABS/TPU/PLA/PETG)
-- M3 fastener kit
-- 30V 10A bench PSU
-- Hand tools
-- Elegoo Arduino Super Starter Kit (Uno included)
-- VS Code + Arduino IDE installed
+- Electronics: Arduino Uno; 5 V buck converters; TCA9548A mux boards; TMC
+  drivers; AS5600 encoders with diametric magnets; breadboards; resistor
+  assortment; one 35 V electrolytic capacitor for VMOT; Wago lever
+  terminals; solid-core wire (~16 AWG); and an Elegoo Arduino Super Starter Kit
+  (sensors, motors, Dupont wires, and Uno).
+- Electrical tools: multimeter with pointed and alligator-clip probes; bench
+  PSU with voltage and current control; wire strippers/cutters; soldering kit.
+- Mechanical: Bambu P1S with AMS 2 Pro and PLA/PETG/ABS/TPU; M3 fasteners and
+  heat-set inserts; calipers; electric screwdriver; torque wrench; small
+  needle-nose and forceps pliers; normal hand tools; lubricants; zip ties.
+- Not yet owned: crimps and crimper; NEMA 17 motor connector housings; stranded
+  wire and cable sleeves; CAN-capable hardware; precision gripper servos; metal
+  shafts; bearings; M5/M6 fasteners; larger heat-set inserts; load cell; PTFE
+  rings/spacers.
 
 ## Material guidance
 - PETG for structural and encoder mounting parts

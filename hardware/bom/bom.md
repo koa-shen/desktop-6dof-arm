@@ -12,16 +12,32 @@ and what is merely nice to have, in
 | Qty | Item | Notes | Have? | Cost |
 | --- | ---- | ----- | ----- | ---- |
 | 1 | Arduino Uno | Elegoo starter kit | yes | - |
-| 1 | NEMA 17 stepper, 1.5 A, 42 N·cm | | | |
-| 1 | TMC2209 driver module | step/dir mode, heatsink included | | |
-| 1 | TCA9548A I2C mux breakout | default addr 0x70 | | |
-| 1 | AS5600 encoder breakout | | | |
-| 1 | **Diametric** magnet, 6x2.5 mm | must be diametric, not axial | | |
-| 1 | 100-470 uF electrolytic, >= 25 V | across VMOT/GND at driver | | |
+| 1 | NEMA 17 stepper, 1.5 A, 42 N-cm, 38 mm body | on hand | yes | - |
+| 1 | TMC2209 driver module | step/dir mode, heatsink included; on hand | yes | - |
+| 1 | TCA9548A I2C mux breakout | default addr 0x70; on hand | yes | - |
+| 1 | AS5600 encoder breakout | on hand | yes | - |
+| 1 | **Diametric** magnet, 6x2.5 mm | must be diametric, not axial; on hand | yes | - |
+| 1 | 100-470 uF electrolytic, 35 V | across VMOT/GND at driver; on hand | yes | - |
 | 1 | Bench PSU 30 V 10 A | have | yes | - |
-| - | Dupont jumpers, breadboard | starter kit | yes | - |
+| - | 5 V buck converters | on hand | yes | - |
+| - | Dupont jumpers, breadboard, resistor assortment, starter-kit sensors/motors | Elegoo Uno Super Starter Kit | yes | - |
+| - | Wago lever terminals, solid-core wire (~16 AWG) | bench wiring only; solid core is unsuitable for moving joints | yes | - |
 | - | M3 fastener kit | have | yes | - |
-| - | PETG filament | encoder + motor mounts | | |
+| - | M3 heat-set insert kit | on hand | yes | - |
+| - | PLA, PETG, ABS, TPU filament | P1S + AMS 2 Pro; PETG for encoder + motor mounts | yes | - |
+
+## Bench tools and material status
+
+| Category | On hand | Still needed |
+| -------- | ------- | ------------ |
+| Electrical assembly | Multimeter with pointed and alligator-clip probes; wire strippers/cutters; complete soldering kit; breadboards; Wago lever terminals | Crimps, a compatible crimp tool, motor connectors (thin, wide NEMA 17-style plug housings), stranded wire, cable sleeves |
+| Power and compute | 30 V 10 A bench PSU with voltage/current control; Arduino Uno | CAN-capable controller and transceiver hardware |
+| Fabrication | Bambu P1S + AMS 2 Pro; PLA, PETG, ABS, TPU; M3 fasteners and heat-set inserts; calipers; electric screwdriver; torque wrench; needle-nose/forceps pliers; normal hand tools; lubricants; zip ties | Metal shafts, bearings, M5/M6 fasteners, larger heat-set inserts, PTFE rings/spacers |
+| Measurement and end effector | Multimeter; calipers | Load cell; precision gripper servo |
+
+The available 35 V electrolytic capacitor has sufficient voltage margin for the
+24 V VMOT rail. Confirm its capacitance and polarity before wiring it across
+VMOT/GND.
 
 ## Phase 3+ (per additional joint)
 
