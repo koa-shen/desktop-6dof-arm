@@ -49,8 +49,25 @@ import numpy as np
 NEMA17_FACE = 42.0
 STEEL_E, STEEL_NU = 200_000.0, 0.30
 PETG_E, PETG_NU = 2_000.0, 0.40
-PETG_YIELD = 50.0                 # tensile; contact allowable is softer than this
+PETG_YIELD = 50.0                 # short-term uniaxial tensile yield
 PETG_LAYER_FACTOR = 0.55          # strength across layer lines, mid of the 40-70 % band
+
+# Peak Hertzian pressure is NOT comparable to uniaxial yield. A contact is
+# triaxially confined: for line contact the maximum shear sits below the
+# surface at tau_max ~ 0.30 p_max, so Tresca yield (tau = sigma_y/2) starts at
+# p_max ~ 1.67 sigma_y, and full plastic flow needs ~3 sigma_y. Comparing
+# p_max directly against sigma_y understates the allowable by that factor and
+# is a common way to reject a working design.
+HERTZ_YIELD_FACTOR = 1.6
+PETG_CONTACT_ALLOWABLE = HERTZ_YIELD_FACTOR * PETG_YIELD
+
+# The caveat that matters more than any of the above: the classical criterion
+# assumes an elastic-perfectly-plastic metal. PETG is viscoelastic, so the real
+# limit under a SUSTAINED load is CREEP, not instantaneous yield - and creep
+# accelerates sharply with temperature, which is why the motor case temperature
+# in SOP step 2.6 is a structural measurement and not just an electrical one.
+# Nothing in this file models creep. Treat a passing contact check as "does not
+# yield on the first revolution", not as "survives a duty cycle".
 ENGAGED_FRACTION = 0.35           # printed parts share load worse than steel
 STEEL_DENSITY = 7.85e-3           # g/mm^3
 
@@ -316,7 +333,26 @@ class CycloidalLayout:
         motor, not the ring pins.
         """
         p = self.hertz_pressure(self.output_pin_force(1.0), self.output_pin_r)
-        return (PETG_YIELD / p) ** 2
+        return (PETG_CONTACT_ALLOWABLE / p) ** 2
+
+    def bearing_stress(self, output_nm: float) -> float:
+        """Nominal bearing stress on the output hole's projected area, MPa.
+
+        Force / (hole diameter x stack height). Unlike the Hertzian peak this
+        is a bulk stress over real material, so it is the one that governs the
+        hole slowly going oval - which is what actually kills printed output
+        pin bores, rather than anything snapping.
+        """
+        f = self.output_pin_force(output_nm)
+        return f / (2.0 * self.output_pin_r * self.disc_thickness * self.disc_count)
+
+    def web_stress(self, output_nm: float) -> float:
+        """Tensile stress in the ligament between an output hole and the root."""
+        lig = self.root_r - (self.output_circle_r + self.output_hole_r)
+        if lig <= 0:
+            return float("inf")
+        return self.output_pin_force(output_nm) / (
+            lig * self.disc_thickness * self.disc_count)
 
     @property
     def steel_pin_mass_g(self) -> float:
@@ -365,8 +401,9 @@ class CycloidalLayout:
             f"{ring_pitch - 2*self.pin_r:.2f} mm between pins")
         p_ring = self.hertz_pressure(self.ring_pin_force(output_nm), self.pin_r,
                                      self.ring_pin_material)
-        add(f"ring pin contact stress at {output_nm:.1f} N.m", p_ring <= PETG_YIELD,
-            f"{p_ring:.0f} MPa peak vs PETG ~{PETG_YIELD:.0f} MPa "
+        add(f"ring pin contact stress at {output_nm:.1f} N.m",
+            p_ring <= PETG_CONTACT_ALLOWABLE,
+            f"{p_ring:.0f} MPa peak vs {PETG_CONTACT_ALLOWABLE:.0f} MPa allowable "
             f"({self.ring_pin_force(output_nm):.0f} N/pin, {self.ring_pin_material})")
         if self.ring_pin_material == "petg":
             allow = PETG_YIELD * PETG_LAYER_FACTOR
@@ -377,8 +414,12 @@ class CycloidalLayout:
                 f"needs d >= {self.min_printed_pin_diameter(output_nm):.2f} mm")
         p_out = self.hertz_pressure(self.output_pin_force(output_nm),
                                     self.output_pin_r)
-        add("output pin contact stress", p_out <= PETG_YIELD,
-            f"{p_out:.0f} MPa peak ({self.output_pin_force(output_nm):.0f} N/pin)")
+        add("output pin contact stress", p_out <= PETG_CONTACT_ALLOWABLE,
+            f"{p_out:.0f} MPa peak vs {PETG_CONTACT_ALLOWABLE:.0f} MPa allowable "
+            f"({self.output_pin_force(output_nm):.0f} N/pin)")
+        add("output-hole bearing stress", self.bearing_stress(output_nm) <= PETG_YIELD,
+            f"{self.bearing_stress(output_nm):.1f} MPa nominal on the projected "
+            f"area - this is the stress that drives hole ovalization")
         return out
 
     def profile_is_simple(self, samples: int = 4000) -> bool:
@@ -600,21 +641,22 @@ def _self_check() -> None:
     print("[15] the output pins, not the ratio, are what caps this envelope")
     ceiling = ref.max_output_torque()
     assert abs(ref.hertz_pressure(ref.output_pin_force(ceiling),
-                                  ref.output_pin_r) - PETG_YIELD) < 1e-9
-    assert ceiling < 4.26, "shoulder demand should not fit"
+                                  ref.output_pin_r) - PETG_CONTACT_ALLOWABLE) < 1e-9
+    assert ceiling > 4.26, "shoulder must clear once the criterion is right"
     bigger = CycloidalLayout(output_pin_r=3.0)
     assert bigger.max_output_torque() > ceiling
     assert bigger.radial_overrun() > ref.radial_overrun(), \
         "bigger pins must make the packing worse - that is the bind"
     print(f"    ceiling {ceiling:.2f} N.m vs 4.26 N.m shoulder demand "
-          f"({4.26/ceiling:.1f}x over)")
-    print(f"    raising pin r 2.0 -> 3.0 lifts it to {bigger.max_output_torque():.2f} "
-          f"N.m but overrun {ref.radial_overrun():+.2f} -> "
-          f"{bigger.radial_overrun():+.2f} mm")
+          f"({ceiling/4.26:.1f}x margin)")
+    print(f"    nominal bearing stress {ref.bearing_stress(4.26):.1f} MPa, "
+          f"web ligament {ref.web_stress(4.26):.1f} MPa - both trivial")
+    print("    => stress is NOT what fails here. Geometry is:")
     small_brg = CycloidalLayout(bearing_od=12.0)
-    assert small_brg.radial_overrun() < ref.radial_overrun()
-    print(f"    a 12 mm eccentric bearing buys back "
-          f"{ref.radial_overrun() - small_brg.radial_overrun():.2f} mm of it")
+    assert ref.radial_overrun() > 0 > small_brg.radial_overrun()
+    print(f"    radial overrun {ref.radial_overrun():+.2f} mm - the 4 mm shoulder "
+          f"bolt does not fit.\n    A 12 mm eccentric bearing takes it to "
+          f"{small_brg.radial_overrun():+.2f} mm and it does.")
 
     print("[16] the envelope check actually bites")
     fat = CycloidalLayout(pin_circle_r=22.0)
