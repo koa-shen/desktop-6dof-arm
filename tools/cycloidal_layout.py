@@ -87,19 +87,19 @@ MU_ROLLING_PETG = 0.015
 @dataclass(frozen=True)
 class CycloidalLayout:
     pins: int = 16                # N ring pins -> N-1 lobes -> N-1 : 1
-    pin_circle_r: float = 17.3    # R
-    pin_r: float = 1.5            # Rr, half a 3 mm dowel
+    pin_circle_r: float = 18.0    # R, 36 mm diameter ring-pin circle
+    pin_r: float = 1.75           # Rr, half a 3.5 mm PETG housing pin
     eccentricity: float = 0.65    # e
-    disc_thickness: float = 5.0
+    disc_thickness: float = 4.0
     disc_count: int = 2
     housing_wall: float = 2.0
-    bearing_od: float = 16.0      # eccentric bearing, e.g. 688
+    bearing_od: float = 14.0      # MR148ZZ eccentric bearing
     output_pins: int = 6
     output_pin_r: float = 2.0     # M3 shoulder bolt, 4 mm shoulder
-    output_circle_r: float = 11.3
+    output_circle_r: float = 11.5 # 23 mm output-shaft circle
     web: float = 1.5              # minimum printed material between features
-    ring_pin_material: str = "steel"
-    ring_pin_fixed: bool = False  # True = printed into the housing, cannot rotate
+    ring_pin_material: str = "petg"
+    ring_pin_fixed: bool = True   # Printed into the housing, cannot rotate
     ring_pin_supported_both_ends: bool = True
     ring_pin_sleeve: bool = False  # rotating sleeve over a printed post
     sleeve_wall: float = 0.5
@@ -531,14 +531,18 @@ def _self_check() -> None:
     print(f"    1 N.m -> {p1:.0f} MPa, 4 N.m -> {p4:.0f} MPa, "
           f"PETG ~{PETG_YIELD:.0f} MPa")
 
-    print("[6] printed pins LOWER contact stress but move the failure to bending")
+    print("[6] printed pins LOWER contact stress but make bending the governing check")
     steel = ref.hertz_pressure(ref.ring_pin_force(4.26), ref.pin_r, "steel")
     petg = ref.hertz_pressure(ref.ring_pin_force(4.26), ref.pin_r, "petg")
     assert petg < steel, "softer pair must spread the contact"
     printed = CycloidalLayout(ring_pin_material="petg", ring_pin_fixed=True)
     sigma = printed.pin_bending_stress(4.26)
     allow = PETG_YIELD * PETG_LAYER_FACTOR
-    assert sigma > allow, "3 mm printed pins should fail bending at the shoulder"
+    assert sigma <= allow, "3.5 mm printed pins should pass bending at the shoulder"
+    legacy = CycloidalLayout(ring_pin_material="petg", ring_pin_fixed=True,
+                             pin_r=1.5)
+    assert legacy.pin_bending_stress(4.26) > allow, \
+        "3 mm printed pins should fail bending at the shoulder"
     cant = CycloidalLayout(ring_pin_material="petg", ring_pin_fixed=True,
                            ring_pin_supported_both_ends=False)
     assert abs(cant.pin_bending_stress(4.26) / sigma - 4.0) < 1e-9
@@ -546,7 +550,7 @@ def _self_check() -> None:
           f"but bending {sigma:.0f} MPa vs {allow:.0f} allowable")
     print(f"    cantilevered pins are 4x worse; supporting both ends is mandatory")
 
-    print("[7] the bending fix is a diameter, and it is a small one")
+    print("[7] the required bending diameter remains within the pin pitch")
     need_d = printed.min_printed_pin_diameter(4.26)
     fixed = CycloidalLayout(ring_pin_material="petg", ring_pin_fixed=True,
                             pin_r=need_d / 2)
@@ -638,25 +642,23 @@ def _self_check() -> None:
     print(f"    printed post {p_petg:.0f} MPa vs steel sleeve {p_steel:.0f} MPa "
           f"at the same {2*sleeve.pin_r:.1f} mm OD")
 
-    print("[15] the output pins, not the ratio, are what caps this envelope")
+    print("[15] the retained pin circle exposes an unresolved output-shaft packing check")
     ceiling = ref.max_output_torque()
     assert abs(ref.hertz_pressure(ref.output_pin_force(ceiling),
-                                  ref.output_pin_r) - PETG_CONTACT_ALLOWABLE) < 1e-9
+                        ref.output_pin_r) - PETG_CONTACT_ALLOWABLE) < 1e-9
     assert ceiling > 4.26, "shoulder must clear once the criterion is right"
     bigger = CycloidalLayout(output_pin_r=3.0)
     assert bigger.max_output_torque() > ceiling
     assert bigger.radial_overrun() > ref.radial_overrun(), \
-        "bigger pins must make the packing worse - that is the bind"
+      "bigger pins must make the packing worse - that is the bind"
     print(f"    ceiling {ceiling:.2f} N.m vs 4.26 N.m shoulder demand "
-          f"({ceiling/4.26:.1f}x margin)")
+        f"({ceiling/4.26:.1f}x margin)")
     print(f"    nominal bearing stress {ref.bearing_stress(4.26):.1f} MPa, "
-          f"web ligament {ref.web_stress(4.26):.1f} MPa - both trivial")
-    print("    => stress is NOT what fails here. Geometry is:")
-    small_brg = CycloidalLayout(bearing_od=12.0)
-    assert ref.radial_overrun() > 0 > small_brg.radial_overrun()
-    print(f"    radial overrun {ref.radial_overrun():+.2f} mm - the 4 mm shoulder "
-          f"bolt does not fit.\n    A 12 mm eccentric bearing takes it to "
-          f"{small_brg.radial_overrun():+.2f} mm and it does.")
+        f"web ligament {ref.web_stress(4.26):.1f} MPa - both trivial")
+    assert ref.radial_overrun() > 0, "the retained reference pin circle must expose its packing conflict"
+    print(f"    radial overrun {ref.radial_overrun():+.2f} mm with the retained "
+            f"{ref.pin_circle_r:.1f} mm pin-circle radius; resolve the CAD clearance "
+            "before judging fit.")
 
     print("[16] the envelope check actually bites")
     fat = CycloidalLayout(pin_circle_r=22.0)

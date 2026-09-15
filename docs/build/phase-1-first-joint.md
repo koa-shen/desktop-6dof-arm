@@ -135,17 +135,18 @@ the first one to be scrap.
 
 | Qty | Part | Spec | Why |
 | --- | ---- | ---- | --- |
-| 2 | Cycloidal disc, printed | 4-5 mm thick; lobe count set by the 42 x 42 mm CAD layout | one disc is inherently unbalanced |
-| design-dependent | Ring pins, **steel dowel** | count and diameter must fit with wall and tool clearance | printed pins wear out in hours |
-| design-dependent | Needle roller sleeves (optional) | to suit the selected ring pin | large efficiency gain; adds stack height |
-| 1 | Eccentric input, printed or turned | start near 0.65 mm eccentricity; bearing selected from the CAD layout | |
-| 1 | Eccentric bearing | selected for the available radial and axial space | |
-| design-dependent | Output shafts | M3 shoulder bolts with 4 mm shoulders are the reference starting point | |
-| design-dependent | Output and main bearings | selected from the available footprint and required joint moment | **this bearing sets your joint stiffness** |
-| 1 | Output flange, printed | carries the AS5600 magnet hub | |
+| 2 | Cycloidal disc, PETG | 4 mm thick, 15 lobes, indexed 180 degrees apart | 16 ring pins give 15:1 nominal ratio |
+| 16 | Ring pins, integral PETG | 3.5 mm, approximately half-embedded in the housing wall | stiffness/wear need measured validation |
+| 2 | Eccentric bearing | MR148ZZ | supports the cycloidal disc centre bores |
+| 6 | Output shafts | M3 shoulder bolts with 4 mm shoulders on a 23 mm diameter circle | threaded ends retain the core |
+| 2 | Crankshaft bearing | 687ZZ, lightly pressed into each output flange | supports the PETG crankshaft |
+| 2 | Main output bearing | 6705-2RS; flange has 25 mm bearing land and axial lip | supports the rotating output flanges |
+| 1 | Crankshaft, PETG | driven by NEMA 17 shaft flat | |
+| 3 | PTFE spacers | 0.8 mm | disc-to-output-flange separation |
+| 1 | Output flange, PETG | six M3 heat-set inserts on a 16 mm diameter link circle | carries AS5600 magnet hub later |
 | - | M3 SHCS assortment, 6-25 mm | | |
-| - | M3 heat-set inserts | printed threads strip | |
-| - | PTFE or lithium grease | run-in and efficiency | |
+| - | M3 heat-set inserts and reducer fasteners | all internal fasteners are M3 | |
+| - | Super Lube Multi-Purpose Synthetic Grease | light application; run-in and efficiency | PETG compatibility to be checked |
 
 ### Additional tools
 

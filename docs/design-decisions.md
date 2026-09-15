@@ -93,8 +93,12 @@ gearbox, target ratio in the 20:1 to 40:1 range.
    `app_04_calibration` measures this - it is the first number to get.
 2. **Imbalance.** A single cycloidal disc rides on an eccentric and is
    inherently unbalanced. Use two discs 180 deg apart, or a counterweight.
-3. **Pin wear.** Printed ring pins wear quickly. Use steel dowel pins, ideally
-   with needle roller sleeves.
+3. **Pin wear and housing stiffness.** The first prototype uses 16 integral
+  3.5 mm PETG ring pins, approximately half-embedded along their axial length
+  in the housing wall. This ties each pin continuously into the housing rather
+  than making it an unsupported dowel. Greased PETG-on-PETG wear and local
+  root creep are measurements, not assumptions; do not infer their life from
+  a steel-dowel design.
 4. **Efficiency is a guess until measured.** Cycloidal is typically 70-90 %;
    printed will be at the low end. Derate the torque budget accordingly.
 5. **Bearing count.** A cycloidal joint needs a lot of bearings. Budget for it.
@@ -104,6 +108,30 @@ efficient stage is ~75 % backdrivable, so this should *not* be self-locking.
 That is good for safety and for future force sensing, but it means the arm will
 sag when unpowered - keep the drivers enabled to hold position, or design in a
 brake for J2/J3.
+
+**First prototype, fixed as built (2026-09-15).** The stage is 16 ring pins /
+15 lobes, hence nominally 15:1, with an 18 mm ring-pin-circle radius (36 mm
+diameter), 0.65 mm eccentricity, and two 4 mm PETG cycloidal discs indexed
+180 degrees apart. The disc centre bores use MR148ZZ bearings. Six M3 shoulder
+bolts with 4 mm shoulders act as output shafts on a 23 mm diameter circle;
+their threads retain the core through the two output flanges. Each flange has
+a 25 mm bearing land and axial seating lip for a 6705-2RS output-flange
+bearing. A 687ZZ bearing is lightly pressed into each output flange to support
+the PETG crankshaft, which is driven directly by the NEMA 17 shaft flat. Three
+0.8 mm PTFE spacers separate the discs from the output flanges. The
+flange-to-link interface is six M3 heat-set inserts on a 16 mm diameter circle;
+all reducer fasteners are M3. Reducer components are PETG, except for the PLA
+clip-on AS5600 encoder housing; lubrication is Super Lube Multi-Purpose
+Synthetic Grease. The first motor is a NEMA 17 x 38 mm stepper.
+
+**Pending CAD measurements before structural claims.** Record the pin axial
+engagement length, actual radial embed depth or exposed arc angle, minimum wall
+thickness behind the pin, pin-to-wall root fillet radius, axial side-wall
+thickness, housing outside diameter, and print orientation/perimeter count.
+The relevant structural problem is a continuously side-embedded half-cylinder
+and housing-wall opening, not a beam supported only at its ends. Validate it
+with a bidirectional output-lever load test before assigning a PETG pin stress
+margin or a reducer torque rating.
 
 ---
 
