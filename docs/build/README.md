@@ -8,6 +8,7 @@ wrong.
 | Guide | Covers | Prerequisite |
 | ----- | ------ | ------------ |
 | [phase-1-first-joint.md](phase-1-first-joint.md) | bench bring-up, then the first printed cycloidal joint | Phase 0 complete |
+| [phase-1b-reducer-encoder-bench.md](phase-1b-reducer-encoder-bench.md) | adaptive first powered reducer and output-encoder evidence sequence | assembled first reducer |
 | [phase-2-closed-loop.md](phase-2-closed-loop.md) | PID + feedforward, fault paths, e-stop, commissioning | Phase 1 exit table filled |
 | [phase-3-multi-joint.md](phase-3-multi-joint.md) | second joint, coordination, the Uno → Teensy migration | Phase 2 exit checklist |
 

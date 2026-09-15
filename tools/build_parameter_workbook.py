@@ -77,7 +77,7 @@ def build_index(workbook: Workbook) -> None:
         ["Purpose", "Working record for confirmed parameters, procurements, CAD inputs, and measured test results."],
         ["Generated", "Run `python tools/build_parameter_workbook.py` from the repository root."],
         ["Source control", "The generator and Markdown documents are reviewable source. The XLSX is the human-facing operational record."],
-        ["Update rule", "Change confirmed design values in the generator and regenerate. Add raw observations and measured outputs directly to Test Log; regeneration preserves its existing rows."],
+        ["Update rule", "Change confirmed design values in the generator and regenerate. Add raw observations and measured outputs directly to Test Log; regeneration preserves all existing rows."],
         ["Status meaning", "Confirmed = measured or fixed in CAD; Assumed = model input; Pending = needs measurement; Failing = known constraint violation."],
     ])
 
@@ -121,9 +121,14 @@ def build_parameters(workbook: Workbook, layout: CycloidalLayout) -> None:
 def build_bom(workbook: Workbook) -> None:
     sheet = workbook.create_sheet("BOM")
     style_sheet(sheet, {"A": 16, "B": 30, "C": 16, "D": 12, "E": 16, "F": 42, "G": 28})
-    title(sheet, "Phase 1B Reducer Bill of Materials")
+    title(sheet, "Phase 1 Reducer and Control Electronics BOM")
     header(sheet, 3, ["Subsystem", "Item", "Part / specification", "Qty", "Status", "Purpose", "Supplier / notes"])
     table_rows(sheet, 4, [
+        ["Control", "Microcontroller", "Arduino Uno", 1, "On hand", "Phase 1 step generation and I2C control", "Elegoo starter kit"],
+        ["Motor control", "Stepper driver", "TMC2209 StepStick module", 1, "On hand", "NEMA 17 step/dir drive", "Heatsink fitted; Vref/current to verify"],
+        ["Sensing", "Absolute encoder", "AS5600 magnetic encoder breakout", 1, "On hand", "Output-side joint angle", "First test wires directly to Uno I2C"],
+        ["Sensing", "I2C mux", "TCA9548A breakout, address 0x70", 1, "On hand", "Separates multiple AS5600 encoders with shared address 0x36", "Not needed for one direct-wired encoder; required from joint 2"],
+        ["Power", "DC-DC converter", "5 V buck converter", "TBD", "On hand", "Regulated logic/encoder supply when required", "Record selected module, input, and output voltage before use"],
         ["Output", "Main bearing", "6705-2RS", 2, "Selected", "Supports output flanges", "Flange land 25 mm; axial lip"],
         ["Cycloidal", "Disc-center bearing", "MR148ZZ", 2, "Selected", "Supports cycloidal disc center bore", ""],
         ["Input", "Crankshaft bearing", "687ZZ", 2, "Selected", "Supports PETG crankshaft in output flanges", "Light press"],
@@ -180,18 +185,19 @@ def build_test_plan(workbook: Workbook) -> None:
     title(sheet, "Phase 1B Test Plan and Acceptance Criteria")
     header(sheet, 3, ["Test ID", "Test", "Controlled inputs", "Record outputs", "Acceptance / decision", "Status", "Notes"])
     table_rows(sheet, 4, [
-        ["P1B-01", "Hand-turn inspection", "Unpowered, ungreased then lightly greased", "Tight-spot angle and direction", "No bind through full input revolution", "Planned", "Never power a binding reducer"],
-        ["P1B-02", "Unloaded run-in", "Driver current/Vref, input RPM, duration, direction", "Temperature, current, noise, resistance before/after", "10-15 min each direction; stop on binding or rapid heat", "Planned", "Wipe plastic debris before final grease"],
-        ["P1B-03", "Actual ratio", "Mark input/output; count input turns", "Input turns per output turn", "Measured value becomes firmware GEAR_RATIO", "Planned", "Do not use nominal 15:1 without this"],
-        ["P1B-04", "Backlash", "Output vertical or counterbalanced; 100 mm lever", "Dial displacement and AS5600 angle, both directions", "Report degrees and repeatability", "Planned", "Avoid gravity preload masking backlash"],
-        ["P1B-05", "Static stiffness", "Known mass, lever radius, direction", "Torque, AS5600 deflection, residual after unload", "Calculate k = torque / deflection", "Planned", "Inspect integrated pin-wall opening"],
-        ["P1B-06", "Efficiency / pullout", "Current, motor speed, lever radius, fish-scale force", "Output torque at stall, motor temperature", "Compare to motor torque x ratio", "Planned", "Start unloaded; test at conservative current"],
-        ["P1B-07", "PETG grease coupon", "Bent PETG coupon, Super Lube exposure", "Crazing, crack, stiffness change after 12 h", "No visible craze or embrittlement", "Planned", "Test at disc print settings"],
-        ["P1B-08", "Encoder under motion", "Magnet gap, speed, driver current", "AS5600 status, I2C errors, encoder noise", "No encoder loss during stepped motion", "Pending", "Mechanical encoder details pending"],
+        ["P1B-01", "Hand-turn inspection", "Unpowered, before then after light grease", "Tight-spot angle and direction", "No bind through full input revolution", "Planned", "Repeat whenever assembly changes"],
+        ["P1B-02", "Output encoder by hand", "Magnet gap and output rotation", "AGC, magnet state, 360 deg continuity", "No status loss or angle jumps", "Pending", "Run app_01_encoder_test before motor power"],
+        ["P1B-03", "Direct-step reducer inspection", "app_10_reducer_bench; 160 then 1600 motor-step jogs", "Output direction, AS5600 motion, noise, I2C errors", "No binding, heat, or encoder fault", "Planned", "GEAR_RATIO intentionally unused"],
+        ["P1B-04", "Unloaded run-in", "Verified driver current, input RPM, duration, direction", "Temperature, current, noise, resistance before/after", "10-15 min each direction; stop on binding or rapid heat", "Planned", "Wipe plastic debris before final grease"],
+        ["P1B-05", "Actual ratio", "Mark input/output; count input turns", "Input turns per output turn", "Measured value becomes firmware GEAR_RATIO", "Planned", "Do not use nominal 15:1 without this"],
+        ["P1B-06", "Backlash", "Output vertical or counterbalanced; 100 mm lever", "Dial displacement and AS5600 angle, both directions", "Report degrees and repeatability", "Planned", "Avoid gravity preload masking backlash"],
+        ["P1B-07", "Static stiffness", "Known mass, lever radius, direction", "Torque, AS5600 deflection, residual after unload", "Calculate k = torque / deflection", "Planned", "Inspect integrated pin-wall opening"],
+        ["P1B-08", "Efficiency / pullout", "Current, motor speed, lever radius, fish-scale force", "Output torque at stall, motor temperature", "Compare to motor torque x ratio", "Planned", "Start unloaded; test at conservative current"],
+        ["P1B-09", "PETG grease coupon", "Bent PETG coupon, Super Lube exposure", "Crazing, crack, stiffness change after 12 h", "No visible craze or embrittlement", "Planned", "Test at disc print settings"],
     ])
     validation = DataValidation(type="list", formula1='"Planned,Running,Pass,Fail,Blocked,Pending"')
     sheet.add_data_validation(validation)
-    validation.add("F4:F11")
+    validation.add("F4:F12")
 
 
 def initial_test_log_rows() -> list[tuple[object, ...]]:
@@ -248,9 +254,9 @@ def build_open_items(workbook: Workbook) -> None:
 def main() -> None:
     layout = CycloidalLayout()
     prior_test_log_rows = existing_test_log_rows()
-    seen = {(row[0], row[1]) for row in prior_test_log_rows}
+    initial_keys = {(row[0], row[1]) for row in initial_test_log_rows()}
     prior_test_log_rows = initial_test_log_rows() + [
-        row for row in prior_test_log_rows if (row[0], row[1]) not in seen or row[1] != "P1A-01"
+        row for row in prior_test_log_rows if (row[0], row[1]) not in initial_keys
     ]
     workbook = Workbook()
     workbook.properties.title = "Desktop 6-DOF Arm Engineering Record"
