@@ -19,9 +19,10 @@ const uint16_t START_STEP_RATE = 500;
 const uint16_t RETURN_STEP_RATE = 1000;
 const uint16_t RAMP_STEPS = 500;
 const uint16_t SETTLE_STEPS = 100;
-const uint16_t MEASURE_STEPS = 400;
-const int16_t EXPECTED_DELTA_RAW = -1024;
-const uint16_t STALL_ERROR_RAW = 102;
+const uint16_t MEASURE_SAMPLE_STEPS = 100;
+const uint16_t MEASURE_STEPS = 1600;
+const int16_t EXPECTED_DELTA_RAW = -4096;
+const uint16_t STALL_ERROR_RAW = 410;
 
 bool readEncoder(uint16_t *rawAngle, uint8_t *status) {
   uint8_t angleBytes[2];
@@ -80,14 +81,24 @@ void runRamp(bool clockwise, uint16_t targetRate, bool accelerating) {
 }
 
 bool runMeasuredMove(uint16_t targetRate, uint16_t *startAngle, uint16_t *endAngle,
-                     uint8_t *startStatus, uint8_t *endStatus) {
+                     int16_t *measuredDelta, uint8_t *startStatus, uint8_t *endStatus) {
   digitalWrite(PIN_EN, DRIVER_ENABLED);
   runRamp(true, targetRate, true);
   runSteps(true, targetRate, SETTLE_STEPS);
 
   if (!readEncoder(startAngle, startStatus) || !magnetFieldIsValid(*startStatus)) return false;
-  runSteps(true, targetRate, MEASURE_STEPS);
-  if (!readEncoder(endAngle, endStatus) || !magnetFieldIsValid(*endStatus)) return false;
+  uint16_t previousAngle = *startAngle;
+  *endAngle = previousAngle;
+  *measuredDelta = 0;
+  for (uint16_t step = 0; step < MEASURE_STEPS; step += MEASURE_SAMPLE_STEPS) {
+    uint16_t currentAngle;
+    runSteps(true, targetRate, MEASURE_SAMPLE_STEPS);
+    if (!readEncoder(&currentAngle, endStatus) || !magnetFieldIsValid(*endStatus)) return false;
+    *measuredDelta += wrappedDelta(currentAngle, previousAngle);
+    previousAngle = currentAngle;
+    *endAngle = previousAngle;
+  }
+  *endAngle = previousAngle;
 
   runSteps(true, targetRate, SETTLE_STEPS);
   runRamp(true, targetRate, false);
@@ -154,12 +165,14 @@ void setup() {
     for (uint8_t run = 1; run <= RUNS_PER_SPEED; run++) {
       uint16_t startAngle = 0;
       uint16_t endAngle = 0;
+      int16_t measuredDelta = 0;
       uint8_t startStatus = 0;
       uint8_t endStatus = 0;
-      bool encoderOk = runMeasuredMove(targetRate, &startAngle, &endAngle, &startStatus, &endStatus);
-      int16_t measuredDelta = encoderOk ? wrappedDelta(endAngle, startAngle) : 0;
-      bool stalled = !encoderOk ||
+      bool encoderOk = runMeasuredMove(targetRate, &startAngle, &endAngle, &measuredDelta,
+                   &startStatus, &endStatus);
+      bool stalled = encoderOk &&
              (uint16_t)abs(measuredDelta - EXPECTED_DELTA_RAW) > STALL_ERROR_RAW;
+      const char *outcome = !encoderOk ? "ENCODER_FAULT" : (stalled ? "STALL" : "PASS");
 
       Serial.print("RESULT,");
       Serial.print(targetRate);
@@ -178,11 +191,11 @@ void setup() {
       Serial.print(",0x");
       Serial.print(endStatus, HEX);
       Serial.print(',');
-      Serial.println(stalled ? "STALL" : "PASS");
+      Serial.println(outcome);
 
-      if (stalled) {
+      if (!encoderOk || stalled) {
         digitalWrite(PIN_EN, HIGH);
-        Serial.println("STALL_DETECTED");
+        Serial.println(!encoderOk ? "ENCODER_FAULT_DETECTED" : "STALL_DETECTED");
         return;
       }
       returnToStart(RETURN_STEP_RATE);

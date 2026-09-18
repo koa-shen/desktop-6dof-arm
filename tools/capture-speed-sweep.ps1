@@ -80,7 +80,7 @@ try {
           vref_volts = $VrefVolts.ToString("F2", $invariantCulture)
           target_pulses_per_second = $speed
           run_number = [int]$parts[2]
-          measure_steps_at_target_speed = if ($speed -eq 0) { "" } else { "400" }
+          measure_steps_at_target_speed = if ($speed -eq 0) { "" } else { "1600" }
           intended_travel_deg = if ($null -eq $intendedAngleDeg) { "" } else { $intendedAngleDeg.ToString("F3", $invariantCulture) }
           start_raw = [int]$parts[3]
           end_raw = [int]$parts[4]
@@ -94,7 +94,8 @@ try {
           outcome = $parts[9]
         })
       }
-      if ($line -eq "SWEEP_COMPLETE" -or $line -eq "STALL_DETECTED") {
+        if ($line -eq "SWEEP_COMPLETE" -or $line -eq "STALL_DETECTED" -or
+          $line -eq "ENCODER_FAULT_DETECTED") {
         $completed = $true
         break
       }
