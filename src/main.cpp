@@ -1,60 +1,198 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+const uint8_t PIN_STEP = 2;
+const uint8_t PIN_DIR = 3;
+const uint8_t PIN_EN = 4;
+const uint8_t DRIVER_ENABLED = LOW;
 const uint8_t AS5600_ADDR = 0x36;
 const uint8_t AS5600_STATUS_REGISTER = 0x0B;
 const uint8_t AS5600_ANGLE_REGISTER = 0x0E;
 
-bool readRegister(uint8_t registerAddress, uint8_t *buffer, uint8_t length) {
-  Wire.beginTransmission(AS5600_ADDR);
-  Wire.write(registerAddress);
-  if (Wire.endTransmission(false) != 0) return false;
+const uint16_t SPEEDS[] = {
+  500, 750, 1000, 1250, 1500, 1750, 2000, 2250,
+  2500, 2750, 3000, 3250, 3500, 3750, 4000
+};
+const uint8_t SPEED_COUNT = sizeof(SPEEDS) / sizeof(SPEEDS[0]);
+const uint8_t RUNS_PER_SPEED = 5;
+const uint16_t START_STEP_RATE = 500;
+const uint16_t RETURN_STEP_RATE = 1000;
+const uint16_t RAMP_STEPS = 500;
+const uint16_t SETTLE_STEPS = 100;
+const uint16_t MEASURE_STEPS = 400;
+const int16_t EXPECTED_DELTA_RAW = -1024;
+const uint16_t STALL_ERROR_RAW = 102;
 
-  if (Wire.requestFrom(AS5600_ADDR, length) != length) return false;
-  for (uint8_t index = 0; index < length; index++) {
-    buffer[index] = Wire.read();
+bool readEncoder(uint16_t *rawAngle, uint8_t *status) {
+  uint8_t angleBytes[2];
+
+  Wire.beginTransmission(AS5600_ADDR);
+  Wire.write(AS5600_STATUS_REGISTER);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)AS5600_ADDR, 1) != 1) {
+    return false;
   }
+  *status = Wire.read();
+
+  Wire.beginTransmission(AS5600_ADDR);
+  Wire.write(AS5600_ANGLE_REGISTER);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)AS5600_ADDR, 2) != 2) {
+    return false;
+  }
+  angleBytes[0] = Wire.read();
+  angleBytes[1] = Wire.read();
+  *rawAngle = ((uint16_t)angleBytes[0] << 8 | angleBytes[1]) & 0x0FFF;
   return true;
 }
 
-void setup() {
-  Serial.begin(115200);
-  Wire.begin();
+bool magnetFieldIsValid(uint8_t status) {
+  return (status & 0x38) == 0x20;
+}
 
-  Serial.println("as5600_direct_i2c_test");
-  Serial.println("AS5600 must be connected: VCC->5V, GND->GND, SDA->A4, SCL->A5");
+int16_t wrappedDelta(uint16_t currentAngle, uint16_t referenceAngle) {
+  int16_t delta = currentAngle - referenceAngle;
+  if (delta > 2047) delta -= 4096;
+  if (delta < -2048) delta += 4096;
+  return delta;
+}
+
+void pulseStep(uint16_t stepRate) {
+  const uint16_t halfPeriodUs = 500000UL / stepRate;
+  digitalWrite(PIN_STEP, HIGH);
+  delayMicroseconds(halfPeriodUs);
+  digitalWrite(PIN_STEP, LOW);
+  delayMicroseconds(halfPeriodUs);
+}
+
+void runSteps(bool clockwise, uint16_t stepRate, uint16_t stepCount) {
+  digitalWrite(PIN_DIR, clockwise ? HIGH : LOW);
+  for (uint16_t step = 0; step < stepCount; step++) {
+    pulseStep(stepRate);
+  }
+}
+
+void runRamp(bool clockwise, uint16_t targetRate, bool accelerating) {
+  for (uint16_t step = 0; step < RAMP_STEPS; step++) {
+    uint16_t rampStep = accelerating ? step : RAMP_STEPS - step - 1;
+    uint16_t stepRate = START_STEP_RATE +
+                        (uint32_t)(targetRate - START_STEP_RATE) * rampStep / RAMP_STEPS;
+    runSteps(clockwise, stepRate, 1);
+  }
+}
+
+bool runMeasuredMove(uint16_t targetRate, uint16_t *startAngle, uint16_t *endAngle,
+                     uint8_t *startStatus, uint8_t *endStatus) {
+  digitalWrite(PIN_EN, DRIVER_ENABLED);
+  runRamp(true, targetRate, true);
+  runSteps(true, targetRate, SETTLE_STEPS);
+
+  if (!readEncoder(startAngle, startStatus) || !magnetFieldIsValid(*startStatus)) return false;
+  runSteps(true, targetRate, MEASURE_STEPS);
+  if (!readEncoder(endAngle, endStatus) || !magnetFieldIsValid(*endStatus)) return false;
+
+  runSteps(true, targetRate, SETTLE_STEPS);
+  runRamp(true, targetRate, false);
+  return true;
+}
+
+void returnToStart(uint16_t targetRate) {
+  runRamp(false, targetRate, true);
+  runSteps(false, targetRate, SETTLE_STEPS * 2 + MEASURE_STEPS);
+  runRamp(false, targetRate, false);
+}
+
+bool waitForStartCommand() {
+  char command[6] = {};
+  while (true) {
+    if (Serial.available()) {
+      size_t length = Serial.readBytesUntil('\n', command, sizeof(command) - 1);
+      command[length] = '\0';
+      if (strcmp(command, "START") == 0) return true;
+    }
+  }
+}
+
+void setup() {
+  pinMode(PIN_STEP, OUTPUT);
+  pinMode(PIN_DIR, OUTPUT);
+  pinMode(PIN_EN, OUTPUT);
+  digitalWrite(PIN_STEP, LOW);
+  digitalWrite(PIN_EN, HIGH);
+
+  Serial.begin(115200);
+  Serial.setTimeout(100);
+  Wire.begin();
+  delay(500);
+  uint16_t baselineAngle;
+  uint8_t status;
+  if (!readEncoder(&baselineAngle, &status)) {
+    Serial.println("ABORT,encoder_not_found");
+    return;
+  }
+  if (!magnetFieldIsValid(status)) {
+    Serial.print("ABORT,invalid_magnet_field,0x");
+    Serial.println(status, HEX);
+    return;
+  }
+
+  Serial.println("READY,speed_sweep_vref_1.25V");
+  if (!waitForStartCommand()) return;
+
+  Serial.println("SWEEP_START");
+  Serial.println("RESULT,speed_pps,run,start_raw,end_raw,measured_delta_raw,expected_delta_raw,status_start,status_end,outcome");
+  Serial.print("RESULT,0,0,");
+  Serial.print(baselineAngle);
+  Serial.print(',');
+  Serial.print(baselineAngle);
+  Serial.print(",0,0,0x");
+  Serial.print(status, HEX);
+  Serial.print(",0x");
+  Serial.print(status, HEX);
+  Serial.println(",BASELINE");
+
+  for (uint8_t speedIndex = 0; speedIndex < SPEED_COUNT; speedIndex++) {
+    uint16_t targetRate = SPEEDS[speedIndex];
+    for (uint8_t run = 1; run <= RUNS_PER_SPEED; run++) {
+      uint16_t startAngle = 0;
+      uint16_t endAngle = 0;
+      uint8_t startStatus = 0;
+      uint8_t endStatus = 0;
+      bool encoderOk = runMeasuredMove(targetRate, &startAngle, &endAngle, &startStatus, &endStatus);
+      int16_t measuredDelta = encoderOk ? wrappedDelta(endAngle, startAngle) : 0;
+      bool stalled = !encoderOk ||
+             (uint16_t)abs(measuredDelta - EXPECTED_DELTA_RAW) > STALL_ERROR_RAW;
+
+      Serial.print("RESULT,");
+      Serial.print(targetRate);
+      Serial.print(',');
+      Serial.print(run);
+      Serial.print(',');
+      Serial.print(startAngle);
+      Serial.print(',');
+      Serial.print(endAngle);
+      Serial.print(',');
+      Serial.print(measuredDelta);
+      Serial.print(',');
+      Serial.print(EXPECTED_DELTA_RAW);
+      Serial.print(",0x");
+      Serial.print(startStatus, HEX);
+      Serial.print(",0x");
+      Serial.print(endStatus, HEX);
+      Serial.print(',');
+      Serial.println(stalled ? "STALL" : "PASS");
+
+      if (stalled) {
+        digitalWrite(PIN_EN, HIGH);
+        Serial.println("STALL_DETECTED");
+        return;
+      }
+      returnToStart(RETURN_STEP_RATE);
+    }
+  }
+
+  digitalWrite(PIN_EN, HIGH);
+  Serial.println("SWEEP_COMPLETE");
 }
 
 void loop() {
-  uint8_t status;
-  uint8_t angleBytes[2];
-
-  if (!readRegister(AS5600_STATUS_REGISTER, &status, 1)) {
-    Serial.println("ERROR: no response from AS5600 at 0x36");
-    delay(1000);
-    return;
-  }
-
-  if (!readRegister(AS5600_ANGLE_REGISTER, angleBytes, 2)) {
-    Serial.println("ERROR: AS5600 acknowledged but angle read failed");
-    delay(1000);
-    return;
-  }
-
-  const uint16_t rawAngle = ((uint16_t)angleBytes[0] << 8 | angleBytes[1]) & 0x0FFF;
-  Serial.print("AS5600 OK, magnet=");
-  Serial.print(status & 0x20 ? "detected" : "NOT detected");
-  Serial.print(", strength=");
-  if (status & 0x08) {
-    Serial.print("too weak");
-  } else if (status & 0x10) {
-    Serial.print("too strong");
-  } else if (status & 0x20) {
-    Serial.print("valid");
-  } else {
-    Serial.print("unavailable");
-  }
-  Serial.print(", raw_angle=");
-  Serial.println(rawAngle);
-  delay(1000);
+  digitalWrite(PIN_EN, HIGH);
 }
