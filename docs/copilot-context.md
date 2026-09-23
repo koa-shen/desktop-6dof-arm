@@ -51,8 +51,10 @@ manufactured units on bench now):
    range, logging `ms,step_pos,commanded_deg,measured_deg` — `measured_deg`
    is motor-shaft angle, used to catch skipped/missed steps, not gearbox
    output angle
-2. True output-side backlash is measured separately via a load-cell +
-   contact-switch dead-band test (no output encoder available)
+2. Current backlash test uses the motor-shaft AS5600 plus a momentary output
+  contact switch. It reports switch-dead-band plus mechanical backlash; a
+  later output encoder can separate those effects. HX711 load-cell integration
+  is deferred.
 3. Manual bench checks: breakaway holding torque, backdrivability, no-load
    current/cogging correlation
 4. See `docs/reducer-test-protocol.md` for the full procedure
@@ -60,11 +62,10 @@ manufactured units on bench now):
 ## Key constraints/notes
 - AS5600 is single-turn absolute (0–360°)
 - Current build mounts the magnet on the **motor/stepper shaft**, not the
-  gearbox output, due to mounting/wiring difficulty. This means
-  `measured_deg` only detects skipped/missed steps (actual vs commanded
-  motor rotation) — it does **not** observe gearbox output behavior
-  (transmission error, backlash). See `docs/reducer-test-protocol.md` for
-  how output-side backlash is measured instead (load cell + contact switch).
+  gearbox output, due to mounting/wiring difficulty. This means encoder angle
+  detects skipped/missed steps, while the switch test infers output dead band
+  from switch closure/release timing. The switch's hysteresis and fixture
+  compliance remain in the result. See `docs/reducer-test-protocol.md`.
 - Only one motor/encoder right now, so no mux — AS5600 direct on A4/A5.
   Don't reintroduce the TCA9548A until multi-joint testing actually starts.
 - Keep sensor wiring away from motor power wiring
@@ -74,14 +75,15 @@ manufactured units on bench now):
   TMC2209 microstep pin config before trusting commanded_deg
 
 ## Current code/files
-- `src/main.cpp`: Phase 2 reducer characterization sweep (motor + AS5600, no mux)
+- `src/main.cpp`: Switch-only backlash/dead-band firmware (motor + AS5600, no mux)
 - `hardware/pinouts/uno-tmc2209-as5600-tca9548a.md`: wiring map
 - `platformio.ini`: Uno config
-- `docs/reducer-test-protocol.md`: reducer test procedure and what to record
+- `docs/reducer-test-protocol.md`: bench SOP and run record
+- `tools/capture-backlash.ps1`: serial capture and summary for backlash runs
 - `docs/test-results/phase2-reducer-log-template.csv`: log header for reducer data
 
 ## Next immediate tasks
-- Confirm `MICROSTEPS` in `src/main.cpp` matches physical TMC2209 MS pin config
-- Run sweep, capture serial log, save into `docs/test-results/`
-- Compute backlash, repeatability, transmission error from the log
-- Do manual breakaway-torque and backdrivability checks per protocol doc
+- Flash the switch-only firmware and complete the bench record
+- Run valid switch dead-band measurements at three output angles
+- Review control-trip spread versus dead-band mean before accepting a run
+- Do manual breakaway-torque, backdrivability, and loaded holding checks
