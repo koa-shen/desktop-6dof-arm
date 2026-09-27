@@ -1,92 +1,159 @@
-# 15:1 Cycloidal Reducer Characterization Protocol
+# Backlash Bench SOP: 15:1 Cycloidal Reducer
 
-Goal: turn "it moves smoothly by hand" into numbers you can design around and
-compare against future reducer revisions.
+## Purpose and measurement limit
 
-## Setup
-- Current build has the AS5600 magnet on the **motor/stepper shaft** (not the
-  gearbox output) — see `hardware/pinouts/uno-tmc2209-as5600-tca9548a.md`.
-  This means `measured_deg` is actual motor rotation, useful for catching
-  skipped/missed steps, but it does **not** see the gearbox output — it
-  cannot measure transmission error or backlash on its own. Output-side
-  backlash needs the load-cell test in step 2 below.
-- Run `src/main.cpp` (Phase 2 build). It auto-runs a sweep sequence on boot and
-  logs `ms,step_pos,commanded_deg,measured_deg` over serial.
-- Capture serial output to a file and save it into
-  `docs/test-results/` using the `phase2-reducer-log-template.csv` header.
-- Log the specific unit under test (serial/print number, date, motor current
-  setting) in the filename or a header comment line.
+This run measures the motor-shaft angle between a contact switch closing while
+approaching the load and opening while reversing away. Dividing that angle by
+the assumed 15:1 ratio gives output-side dead band in degrees and arcminutes.
 
-## Automated (firmware-driven) measurements
+With no output encoder, this is not a pure mechanical backlash measurement. It
+includes the switch's release hysteresis and mechanical compliance. Use the
+same switch, fixture, preload, direction, and procedure to compare reducer
+revisions. A later output encoder can separate these effects.
 
-1. **Stepper tracking error (not transmission error)**
-   - From the sweep log: `error_deg = measured_deg - commanded_deg`.
-   - With the encoder on the motor shaft this reports skipped/missed steps,
-     not gearbox transmission error. Non-zero error here means the motor
-     stalled or lost steps during the sweep — invalidates any log-derived
-     numbers below it, so check this first.
+The AS5600 is on the motor shaft. It detects missed steps and supplies the
+angular measurement; it does not observe output transmission error directly.
 
-2. **Repeatability (motor-shaft only)**
-   - With `SWEEP_CYCLES > 1`, compare measured_deg across cycles at the same
-     commanded_deg and same approach direction.
-   - Report as +/- range (or std dev) in arcmin — this is motor-shaft
-     unidirectional repeatability (skipped-step consistency), not output
-     repeatability.
+## Bench record
 
-## Manual measurements (no firmware needed yet)
+Fill this in before pressing START:
 
-3. **Output-side backlash — load-cell + contact-switch dead-band test**
-   - Requires new hardware: a load cell + amplifier (e.g. HX711 + small
-     S-type/button load cell), and an Omron V-156-1C25 snap-action lever
-     switch at the contact point (NO contact: closed while touching, open
-     when separated — see `hardware/pinouts/uno-tmc2209-as5600-tca9548a.md`).
-     No output encoder needed.
-   - Mount the output arm to press against the load cell with a small,
-     repeatable preload (~1–2 N).
-   - Command the motor to reverse in small fixed increments (a few
-     microsteps at a time), settling briefly before each sample. Log
-     `motor_actual_deg` (AS5600), `force_N` (load cell), and `contact`
-     (digital pin) per sample.
-   - Find **t1**: first sample where `force_N` falls to ~0 (below a noise
-     threshold, e.g. <2–3% of preload, sustained for a couple samples).
-   - Find **t2**: first sample after t1 where `contact` opens (true
-     mechanical separation — force alone can't distinguish this from
-     "touching with zero force").
-   - `backlash_output_deg = (motor_actual_deg[t2] - motor_actual_deg[t1]) / GEAR_RATIO`.
-     Report in arcmin (`deg * 60`).
-   - Repeat over several reversal cycles and at a few different output
-     angles (cycloidal lash can vary with position); average.
+| Field | Value |
+|---|---|
+| Date / UTC | |
+| Operator | |
+| Unit ID / revision | |
+| Motor | NEMA 17, serial/notes: |
+| Gear ratio used | 15:1 |
+| VREF | 1.25 V target; actual: |
+| Supply voltage | |
+| Microstep setting | |
+| Switch model | Omron V-156-1C25 or: |
+| Switch mounting direction | |
+| Output arm / fixture | |
+| Nominal preload | 1-2 N, actual/notes: |
+| Ambient / temperature | |
+| Firmware commit/build | |
 
-4. **Holding torque / static friction (breakaway torque)**
-   - With motor energized and holding position, apply increasing torque via a
-     calibrated torque wrench or hanging-weight-on-lever-arm until slip.
-   - Record breakaway torque in the loaded (output) direction.
+## Equipment
 
-5. **Backdrivability**
-   - With motor de-energized (`PIN_EN` HIGH — firmware does this after the
-     sweep), try to rotate the output by hand/torque wrench.
-   - Note whether it backdrives freely, backdrives with resistance, or is
-     self-locking. Record the torque needed if it moves.
+- Uno and TMC2209 assembly with AS5600 motor-shaft encoder
+- Reducer and output arm fixed to a rigid bench fixture
+- Momentary SPDT switch positioned so NO is closed while touching the load
+- Load cell or force gauge for setting repeatable preload; HX711 is optional
+  for this switch-only firmware
+- Bench PSU, multimeter, USB cable, computer, and terminal capture script
+- 100-470 uF electrolytic capacitor across TMC2209 VMOT/GND
+- Mechanical stops or a hand on the emergency power switch
 
-6. **No-load input current / smoothness**
-   - Measure motor current draw during a slow, unloaded sweep (bench PSU
-     ammeter or inline shunt). Note any current spikes correlating with
-     step-1 tracking error — indicates cogging/binding at specific
-     rotor angles.
+## Wiring and safety
 
-7. **Efficiency (optional, needs load cell/torque sensor)**
-   - Output torque delivered / (input torque x gear ratio) at a fixed speed.
-     Can reuse the load cell from step 3. Defer until step 3 is working —
-     not required for Phase 2.
+1. Power off before changing any wire. Never hot-plug motor leads.
+2. Confirm D2 STEP, D3 DIR, D4 EN, A4 SDA, A5 SCL, and D7 switch input.
+3. Wire switch COM to GND and NO to D7. Leave NC open. `INPUT_PULLUP` means
+   LOW = touching and HIGH = separated.
+4. Confirm common ground between Uno and TMC2209. Keep I2C wiring away from
+   motor power wiring.
+5. Confirm the output arm cannot enter a hard stop during the commanded travel.
+6. Start with the documented conservative VREF. Disable power immediately if
+   the mechanism binds, chatters, heats unexpectedly, or approaches a stop.
 
-## Data to keep per unit tested
-- Backlash (arcmin, from the load-cell dead-band test)
-- Motor-shaft repeatability (arcmin) and tracking error (skipped steps)
-- Breakaway holding torque
-- Backdrivable? (Y/N + torque if yes)
-- Any audible/tactile anomalies (clicking, binding at specific angles)
+## Firmware configuration
 
-## Suggested next hardware step after this data is in
-- If backlash/repeatability are within spec for wrist/end joints, move to
-  loaded testing (hang a known mass at a known lever arm) to validate
-  holding torque under real conditions before committing to all 6 joints.
+The installed firmware is `src/main.cpp` and runs at 800 pulses/second. It
+uses 2-step increments, 15 ms settling, four-sample switch debounce, 60 steps
+of contact overtravel, three same-direction control trips, and six dead-band
+cycles. Do not change these values between comparison runs without recording
+ the change.
+
+Before flashing, verify:
+
+- `GEAR_RATIO` matches the reducer under test.
+- `SEEK_STEP_RATE` remains below the validated speed margin.
+- `OVERTRAVEL_STEPS` is enough to seat the contact but does not overload it.
+- `BACKOFF_STEPS` fully releases the switch and leaves clearance.
+- The physical TMC2209 microstep setting does not affect the encoder-derived
+  result, but record it for repeatability and future commanded-step work.
+
+Build and upload from the project directory:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run --target upload --upload-port COM3
+```
+
+Replace `COM3` with the actual port. A successful build is required before
+uploading. Open the serial monitor at 115200 baud and verify:
+
+```text
+READY,backlash_switch_deadband
+```
+
+## Fixture setup
+
+1. Mount the reducer so the output arm presses the load cell or force gauge.
+2. Adjust the switch so its lever is depressed at the same contact condition,
+   with enough margin that it cannot be crushed during overtravel.
+3. Apply the chosen preload. Record the value and do not change it during a
+   run.
+4. Rotate or position the reducer at the first test angle. Mark this position.
+5. Confirm the switch state by hand: touching must read closed/LOW; separation
+   must read open/HIGH.
+6. Remove loose tools from the travel path and keep one hand near power-off.
+
+## Data collection
+
+From the project directory, run:
+
+```powershell
+.\tools\capture-backlash.ps1 -PortName COM3 -UnitId reducer-01 -VrefVolts 1.25
+```
+
+The script waits for READY, sends START, captures the serial log, and writes:
+
+- `docs/test-results/backlash-<timestamp>.csv` for the six dead-band rows
+- `docs/test-results/backlash-<timestamp>-serial.log` for the complete trace
+
+The firmware sequence is:
+
+1. Release the switch if needed, then back off 600 steps.
+2. Take three same-direction control trips. Their spread is the measurement
+   noise/fixture repeatability check.
+3. For each of six cycles, approach until the switch closes, overtravel 60
+   steps, reverse until the switch opens, and back off.
+4. Report `delta_motor_deg` after subtracting the measured overtravel, then
+   divide by 15 to obtain `deadband_output_deg` and arcminutes.
+
+Stop the run if the arm approaches a hard stop, the switch does not change,
+the encoder reports a fault, the motor stalls, or the load becomes unsafe.
+The firmware disables the driver on completion or abort.
+
+## Run acceptance and fill-in
+
+After capture, enter the script summary here:
+
+| Result | Value |
+|---|---|
+| Control trip spread at output | ___ arcmin |
+| Dead-band mean | ___ arcmin |
+| Dead-band minimum / maximum | ___ / ___ arcmin |
+| Cycle count | 6 |
+| Encoder faults / stalls | |
+| Switch bounce observed | |
+| Fixture movement | |
+| Audible or tactile anomalies | |
+
+Treat the run as invalid and repeat it if the control spread is a large
+fraction of the dead-band mean, any cycle aborts, the switch is intermittent,
+or the fixture moves. The capture script warns when control spread is at least
+half the measured mean; this is a screening rule, not a mechanical spec.
+
+Repeat the valid run at three output angles and average only after checking
+that the individual runs are stable. Keep every CSV and serial log.
+
+## Follow-on tests
+
+After backlash data is stable, perform breakaway holding torque,
+backdrivability, and loaded holding tests. Do not replicate the reducer across
+the other joints until its measured dead band, torque, and thermal behavior
+fit the joint's requirements.

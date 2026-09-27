@@ -1,0 +1,1 @@
+run_utc,unit_id,vref_volts,output_angle_deg,preload_N,cycle,delta_motor_deg,deadband_output_deg,deadband_output_arcmin,control_spread_output_arcmin,validity,notes

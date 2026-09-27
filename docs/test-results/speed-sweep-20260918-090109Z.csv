@@ -1,0 +1,3 @@
+﻿"run_utc","vref_volts","target_pulses_per_second","run_number","measure_steps_at_target_speed","intended_travel_deg","start_raw","end_raw","measured_delta_raw","expected_delta_raw","error_raw","error_deg","error_percent","status_start","status_end","outcome"
+"2026-09-18T09:01:12.0215412Z","1.25","0","0","","","3755","3755","0","0","","","","0x27","0x27","BASELINE"
+"2026-09-18T09:01:15.3388406Z","1.25","500","1","400","90.000","2340","1430","-910","-1024","114","10.020","11.133","0x27","0x27","STALL"
