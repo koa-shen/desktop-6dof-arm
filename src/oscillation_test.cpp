@@ -85,14 +85,42 @@ void printHelp() {
   Serial.println("STOP disables the driver; each sweep is limited to 8192 step pulses.");
 }
 
-bool stopRequested() {
-  if (!Serial.available()) return false;
-  char command[16];
-  const size_t length = Serial.readBytesUntil('\n', command, sizeof(command) - 1);
-  command[length] = '\0';
-  while (length > 0 && (command[strlen(command) - 1] == '\r' || command[strlen(command) - 1] == ' ')) {
-    command[strlen(command) - 1] = '\0';
+bool readCommandLine(char *command, size_t commandSize) {
+  static char input[32];
+  static size_t inputLength = 0;
+  static bool overflow = false;
+
+  while (Serial.available()) {
+    const char character = Serial.read();
+    if (character == '\r') continue;
+    if (character == '\n') {
+      if (overflow) {
+        Serial.println("ERROR,command_too_long");
+        inputLength = 0;
+        overflow = false;
+        continue;
+      }
+      input[inputLength] = '\0';
+      strncpy(command, input, commandSize - 1);
+      command[commandSize - 1] = '\0';
+      inputLength = 0;
+      return true;
+    }
+    if (overflow) continue;
+    if (inputLength < sizeof(input) - 1) {
+      input[inputLength++] = character;
+    } else {
+      overflow = true;
+    }
   }
+  return false;
+}
+
+bool stopRequested() {
+  char command[32];
+  if (!readCommandLine(command, sizeof(command))) return false;
+  size_t length = strlen(command);
+  while (length > 0 && command[length - 1] == ' ') command[--length] = '\0';
   if (strcmp(command, "STOP") == 0) {
     disableDriver();
     Serial.println("STOPPED,driver=DISABLED");
@@ -212,7 +240,6 @@ void setup() {
   digitalWrite(PIN_EN, HIGH);
 
   Serial.begin(115200);
-  Serial.setTimeout(100);
   Wire.begin();
   delay(500);
   Serial.println("READY,oscillation_test_v1,driver=DISABLED");
@@ -221,9 +248,6 @@ void setup() {
 }
 
 void loop() {
-  if (!Serial.available()) return;
-  char command[16];
-  const size_t length = Serial.readBytesUntil('\n', command, sizeof(command) - 1);
-  command[length] = '\0';
-  handleCommand(command);
+  char command[32];
+  if (readCommandLine(command, sizeof(command))) handleCommand(command);
 }

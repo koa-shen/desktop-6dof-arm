@@ -100,6 +100,37 @@ void printHelp() {
   Serial.println("F=DIR HIGH; R=DIR LOW; jogs require ENABLE; max 200 steps per command.");
 }
 
+bool readCommandLine(char *command, size_t commandSize) {
+  static char input[32];
+  static size_t inputLength = 0;
+  static bool overflow = false;
+
+  while (Serial.available()) {
+    const char character = Serial.read();
+    if (character == '\r') continue;
+    if (character == '\n') {
+      if (overflow) {
+        Serial.println("ERROR,command_too_long");
+        inputLength = 0;
+        overflow = false;
+        continue;
+      }
+      input[inputLength] = '\0';
+      strncpy(command, input, commandSize - 1);
+      command[commandSize - 1] = '\0';
+      inputLength = 0;
+      return true;
+    }
+    if (overflow) continue;
+    if (inputLength < sizeof(input) - 1) {
+      input[inputLength++] = character;
+    } else {
+      overflow = true;
+    }
+  }
+  return false;
+}
+
 void jog(bool forward, long requestedSteps) {
   if (!driverEnabled) {
     Serial.println("ERROR,driver_disabled; send ENABLE first");
@@ -218,9 +249,6 @@ void setup() {
 }
 
 void loop() {
-  static char commandLine[32];
-  if (!Serial.available()) return;
-  size_t length = Serial.readBytesUntil('\n', commandLine, sizeof(commandLine) - 1);
-  commandLine[length] = '\0';
-  handleCommand(commandLine);
+  char commandLine[32];
+  if (readCommandLine(commandLine, sizeof(commandLine))) handleCommand(commandLine);
 }
