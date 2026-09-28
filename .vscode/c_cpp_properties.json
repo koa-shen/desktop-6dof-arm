@@ -8,27 +8,27 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/src",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/cores/arduino",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/variants/standard",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/HID/src",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
-                "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "C:/Users/koashen/OneDrive - SLAC National Accelerator Laboratory/desktop-6dof-arm/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/variants/standard",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
                 ""
             ],
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/src",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/cores/arduino",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/variants/standard",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/HID/src",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
-                    "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "C:/Users/koashen/OneDrive - SLAC National Accelerator Laboratory/desktop-6dof-arm/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/variants/standard",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "C:/Users/koashen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
                     ""
                 ]
             },
@@ -43,7 +43,7 @@
             ],
             "cStandard": "gnu11",
             "cppStandard": "gnu++11",
-            "compilerPath": "C:/Users/koash/.platformio/packages/toolchain-atmelavr/bin/avr-gcc.exe",
+            "compilerPath": "C:/Users/koashen/.platformio/packages/toolchain-atmelavr/bin/avr-gcc.exe",
             "compilerArgs": [
                 "-mmcu=atmega328p",
                 ""
