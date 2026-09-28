@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,9 +11,12 @@ const uint8_t PIN_SWITCH = 7;
 const uint8_t DRIVER_ENABLED = LOW;
 const uint8_t AS5600_ADDR = 0x36;
 const uint8_t ENCODER_SAMPLE_STEPS = 10;
-const uint16_t STEP_RATE = 400;
-const uint16_t HALF_TURN_RAW = 2048;
-const uint16_t MAX_STEPS_PER_SWEEP = 8192;
+const uint16_t STEP_RATE = 800;
+const uint32_t OUTPUT_HALF_TURN_RAW = 15UL * 2048UL;
+const float MIN_MOVE_DEG = 0.01f;
+const float MAX_MOVE_DEG = 180.0f;
+const uint16_t MAX_STEPS_PER_LEG = 60000;
+const uint16_t MAX_STEPS_WITHOUT_MOTION = 1600;
 
 bool driverEnabled = false;
 
@@ -80,9 +84,10 @@ void printStatus() {
 }
 
 void printHelp() {
-  Serial.println("COMMANDS,STATUS | RUN | STOP | HELP");
-  Serial.println("RUN oscillates the motor shaft by measured 180-degree half-turns.");
-  Serial.println("STOP disables the driver; each sweep is limited to 8192 step pulses.");
+  Serial.println("COMMANDS,MOVE <signed_deg> | RUN | STOP | STATUS | HELP");
+  Serial.println("MOVE accepts -180..180 degrees, minimum 0.01; positive=DIR HIGH.");
+  Serial.println("RUN moves reducer output 180 degrees, then returns to its start once.");
+  Serial.println("Assumes 15:1 reducer; STOP disables the driver during motion.");
 }
 
 bool readCommandLine(char *command, size_t commandSize) {
@@ -130,16 +135,15 @@ bool stopRequested() {
   return false;
 }
 
-bool pulseStep() {
+void pulseStep() {
   const uint16_t halfPeriodUs = 500000UL / STEP_RATE;
   digitalWrite(PIN_STEP, HIGH);
   delayMicroseconds(halfPeriodUs);
   digitalWrite(PIN_STEP, LOW);
   delayMicroseconds(halfPeriodUs);
-  return true;
 }
 
-bool runSweep(bool forward) {
+bool runLeg(bool forward, uint32_t targetRaw, const char *legName, int32_t *measuredDelta) {
   uint16_t rawAngle = 0;
   uint8_t status = 0;
   if (!readEncoder(&rawAngle, &status) || !magnetFieldIsValid(status)) {
@@ -148,15 +152,19 @@ bool runSweep(bool forward) {
     return false;
   }
 
-  const uint16_t startRaw = rawAngle;
-  int32_t sweepDelta = 0;
+  uint16_t previousRaw = rawAngle;
+  int32_t legDelta = 0;
   uint16_t steps = 0;
+  uint16_t stepsWithoutMotion = 0;
   digitalWrite(PIN_DIR, forward ? HIGH : LOW);
-  delay(100);
+  Serial.print("LEG_START,name=");
+  Serial.print(legName);
+  Serial.print(",target_output_deg=");
+  Serial.println((float)targetRaw * 360.0f / (4096.0f * 15.0f), 2);
 
-  while (labs(sweepDelta) < HALF_TURN_RAW && steps < MAX_STEPS_PER_SWEEP) {
+  while ((uint32_t)labs(legDelta) < targetRaw && steps < MAX_STEPS_PER_LEG) {
     for (uint8_t sampleStep = 0; sampleStep < ENCODER_SAMPLE_STEPS; sampleStep++) {
-      if (steps >= MAX_STEPS_PER_SWEEP) break;
+      if (steps >= MAX_STEPS_PER_LEG) break;
       pulseStep();
       steps++;
     }
@@ -167,34 +175,48 @@ bool runSweep(bool forward) {
       Serial.println("ABORT,encoder_or_magnet_fault,driver=DISABLED");
       return false;
     }
-    sweepDelta += wrappedDelta(rawAngle, (uint16_t)((startRaw + sweepDelta) & 0x0FFF));
+
+    const int16_t delta = wrappedDelta(rawAngle, previousRaw);
+    legDelta += delta;
+    previousRaw = rawAngle;
+    if (delta == 0) {
+      stepsWithoutMotion += ENCODER_SAMPLE_STEPS;
+      if (stepsWithoutMotion >= MAX_STEPS_WITHOUT_MOTION) {
+        disableDriver();
+        Serial.println("ABORT,no_encoder_motion,driver=DISABLED");
+        return false;
+      }
+    } else {
+      stepsWithoutMotion = 0;
+    }
   }
 
-  if (labs(sweepDelta) < HALF_TURN_RAW) {
+  if ((uint32_t)labs(legDelta) < targetRaw) {
     disableDriver();
-    Serial.print("ABORT,sweep_limit,direction=");
-    Serial.print(forward ? "FWD" : "REV");
+    Serial.print("ABORT,step_limit,leg=");
+    Serial.print(legName);
     Serial.println(",driver=DISABLED");
     return false;
   }
 
-  Serial.print("SWEEP,direction=");
-  Serial.print(forward ? "FWD" : "REV");
+  *measuredDelta = legDelta;
+  Serial.print("LEG_COMPLETE,name=");
+  Serial.print(legName);
   Serial.print(",steps=");
   Serial.print(steps);
-  Serial.print(",delta_raw=");
-  Serial.print(sweepDelta);
-  Serial.print(",delta_deg=");
-  Serial.print(sweepDelta * (360.0f / 4096.0f), 2);
+  Serial.print(",motor_deg=");
+  Serial.print(legDelta * (360.0f / 4096.0f), 2);
+  Serial.print(",output_deg=");
+  Serial.print(legDelta * (360.0f / (4096.0f * 15.0f)), 2);
   Serial.print(",switch=");
   Serial.print(switchName());
   Serial.print(",raw_end=");
   Serial.println(rawAngle);
-  delay(250);
+  delay(300);
   return true;
 }
 
-void runOscillation() {
+void runCycle() {
   uint16_t rawAngle = 0;
   uint8_t status = 0;
   if (!readEncoder(&rawAngle, &status) || !magnetFieldIsValid(status)) {
@@ -204,12 +226,50 @@ void runOscillation() {
 
   digitalWrite(PIN_EN, DRIVER_ENABLED);
   driverEnabled = true;
-  Serial.println("RUNNING,send_STOP_to_end");
-  bool forward = true;
-  while (driverEnabled) {
-    if (!runSweep(forward)) return;
-    forward = !forward;
+  Serial.println("CYCLE_START,output_target_deg=180,return_to_start=yes");
+
+  int32_t outboundDelta = 0;
+  if (!runLeg(true, OUTPUT_HALF_TURN_RAW, "OUTBOUND", &outboundDelta)) return;
+
+  int32_t returnDelta = 0;
+  if (!runLeg(false, (uint32_t)labs(outboundDelta), "RETURN", &returnDelta)) return;
+
+  disableDriver();
+  Serial.print("CYCLE_COMPLETE,outbound_output_deg=");
+  Serial.print(outboundDelta * (360.0f / (4096.0f * 15.0f)), 2);
+  Serial.print(",return_output_deg=");
+  Serial.print(returnDelta * (360.0f / (4096.0f * 15.0f)), 2);
+  Serial.println(",driver=DISABLED");
+}
+
+void moveOutput(float requestedDegrees) {
+  if (!isfinite(requestedDegrees) || fabsf(requestedDegrees) < MIN_MOVE_DEG ||
+      fabsf(requestedDegrees) > MAX_MOVE_DEG) {
+    Serial.println("ERROR,MOVE_range_is_0.01_to_180_degrees");
+    return;
   }
+
+  uint16_t rawAngle = 0;
+  uint8_t status = 0;
+  if (!readEncoder(&rawAngle, &status) || !magnetFieldIsValid(status)) {
+    Serial.println("ABORT,encoder_or_magnet_fault,driver=DISABLED");
+    return;
+  }
+
+  const uint32_t targetRaw = (uint32_t)(fabsf(requestedDegrees) * 15.0f * 4096.0f / 360.0f + 0.5f);
+  const bool forward = requestedDegrees > 0.0f;
+  digitalWrite(PIN_EN, DRIVER_ENABLED);
+  driverEnabled = true;
+
+  int32_t measuredDelta = 0;
+  if (!runLeg(forward, targetRaw, "MOVE", &measuredDelta)) return;
+
+  disableDriver();
+  Serial.print("MOVE_COMPLETE,requested_output_deg=");
+  Serial.print(requestedDegrees, 3);
+  Serial.print(",measured_output_deg=");
+  Serial.print(measuredDelta * (360.0f / (4096.0f * 15.0f)), 3);
+  Serial.println(",driver=DISABLED");
 }
 
 void handleCommand(char *command) {
@@ -217,12 +277,23 @@ void handleCommand(char *command) {
   while (length > 0 && (command[length - 1] == '\r' || command[length - 1] == ' ')) {
     command[--length] = '\0';
   }
-  if (strcmp(command, "STATUS") == 0) {
+  if (strncmp(command, "MOVE", 4) == 0 && (command[4] == ' ' || command[4] == '\t')) {
+    char *valueText = command + 4;
+    while (*valueText == ' ' || *valueText == '\t') valueText++;
+    char *end = NULL;
+    const float requestedDegrees = (float)strtod(valueText, &end);
+    while (*end == ' ' || *end == '\t') end++;
+    if (end == valueText || *end != '\0') {
+      Serial.println("ERROR,usage: MOVE <signed_degrees>");
+      return;
+    }
+    moveOutput(requestedDegrees);
+  } else if (strcmp(command, "STATUS") == 0) {
     printStatus();
   } else if (strcmp(command, "HELP") == 0) {
     printHelp();
   } else if (strcmp(command, "RUN") == 0) {
-    runOscillation();
+    runCycle();
   } else if (strcmp(command, "STOP") == 0) {
     disableDriver();
     Serial.println("STOPPED,driver=DISABLED");
