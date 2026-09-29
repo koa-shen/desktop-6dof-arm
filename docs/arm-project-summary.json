@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "updated": "2026-09-27",
+  "project": {
+    "name": "Desktop 6-DOF Arm",
+    "summary": "Design and manufacture a desktop six-axis robotic manipulator for moving payloads across a desk.",
+    "goal_dof": 6,
+    "current_phase": {
+      "name": "Phase 2",
+      "title": "Single-joint cycloidal reducer characterization",
+      "status": "in_progress"
+    }
+  },
+  "system_targets": {
+    "payload_mass_kg": {
+      "value": 0.5,
+      "status": "provisional_target",
+      "notes": "Useful payload mass; excludes gripper/tool mass, which must be included in joint load calculations.",
+      "source": "User-provided design target; not yet validated by analysis or test."
+    },
+    "reach_mm": {
+      "value": 381,
+      "status": "provisional_target",
+      "notes": "Approximately 15 in, measured from base rotation axis to tool center point at full extension; workspace layout remains to be defined.",
+      "source": "User-provided design target; not yet validated by CAD or test."
+    },
+    "workspace": {
+      "value": null,
+      "status": "partially_defined",
+      "notes": "Desk-level transfer between opposite sides of the usable workspace; exact endpoints, heights, base placement, and obstacles remain undefined."
+    },
+    "end_effector": {
+      "value": "3D-printed rack-and-pinion gripper",
+      "status": "concept",
+      "actuation_preference": "pneumatic with controlled holding force",
+      "alternative": "servo actuation",
+      "notes": "Actuator and finger geometry are not selected or tested."
+    },
+    "payload_capacity_kg": {
+      "value": 0.5,
+      "status": "provisional_target",
+      "notes": "Useful payload target; not yet validated. Establish joint capacity after link geometry, gripper/tool mass, reducer efficiency, and motion loads are known."
+    },
+    "joint_speed_deg_per_s": {
+      "value": null,
+      "status": "not_defined",
+      "notes": "No per-joint speed requirement set; the system-level transfer time is specified separately."
+    },
+    "cycle_time_s": {
+      "value": 5,
+      "status": "provisional_maximum",
+      "notes": "Maximum move time between opposite sides of the usable workspace with the full target payload; exact endpoints and whether grasp/release time is excluded need confirmation."
+    },
+    "whole_arm_repeatability_mm": {
+      "value": null,
+      "status": "not_defined"
+    }
+  },
+  "prototype_configuration": {
+    "motor": {
+      "type": "NEMA 17 stepper",
+      "current_a": 1.5,
+      "holding_torque_n_cm": 42,
+      "status": "architecture_decision; verify exact motor"
+    },
+    "driver": "TMC2209 step/dir",
+    "encoder": {
+      "type": "AS5600 magnetic absolute encoder",
+      "range_deg": [0, 360],
+      "mounting": "motor shaft; does not measure reducer output behavior"
+    },
+    "reducer": {
+      "type": "cycloidal",
+      "ratio": 15,
+      "ratio_status": "assumed_in_firmware; verify manufactured unit",
+      "status": "manufactured units on bench; characterization in progress"
+    },
+    "controller": "Arduino Uno for the single-joint prototype",
+    "base_bearing": {
+      "type": "AXK2542 needle thrust bearing",
+      "bore_mm": 25,
+      "status": "ordered"
+    },
+    "available_bench_supply": {
+      "voltage_v": 30,
+      "current_a": 10,
+      "note": "Available prototype supply; not a finalized full-arm power budget."
+    }
+  },
+  "reducer_test_settings": {
+    "output_sweep_range_deg": 60,
+    "cycles": 3,
+    "motor_full_steps_per_rev": 200,
+    "microsteps": 1,
+    "microsteps_status": "configured_in_firmware; verify TMC2209 hardware setting",
+    "load_cell_preload_n": 1.5,
+    "force_zero_threshold_n": 0.05,
+    "force_zero_threshold_status": "placeholder; set from measured noise floor"
+  },
+  "acceptance_targets": {
+    "output_backlash_arcmin": null,
+    "breakaway_torque_n_m": null,
+    "backdrivability": null,
+    "status": "measure reducer first; no acceptance limits specified yet"
+  },
+  "demo_use_cases": [
+    {
+      "item": "smartphone",
+      "status": "aspirational",
+      "notes": "Confirm specific device and mount/adapter mass fit within the 0.5 kg useful payload target."
+    },
+    {
+      "item": "compact camera",
+      "status": "aspirational",
+      "notes": "Camera and mount mass varies; not guaranteed within the target payload."
+    }
+  ],
+  "source_files": [
+    "README.md",
+    "docs/copilot-context.md",
+    "docs/reducer-test-protocol.md",
+    "src/main.cpp",
+    "hardware/pinouts/uno-tmc2209-as5600-tca9548a.md"
+  ]
+}

@@ -3,6 +3,24 @@
 ## Project goal
 Design and manufacture a desktop 6-DOF robotic manipulator arm and program it to move payloads across a desk.
 
+## Public project snapshot
+- `README.md` contains the concise at-a-glance project status for visitors.
+- `docs/arm-project-summary.json` is the machine-readable status feed for
+  portfolio integrations. Keep it aligned with this context when project
+  targets or phase status change.
+- Provisional whole-arm goals: 0.5 kg useful payload (tool mass excluded),
+  about 381 mm reach from base axis to tool center point at full extension, and
+  a no-more-than-5-second move between opposite sides of the usable workspace.
+  These are design targets, not demonstrated performance; endpoint/path and
+  workspace layout still need definition.
+- End-effector concept: 3D-printed rack-and-pinion gripper, preferably
+  pneumatically actuated with controlled holding force; servo actuation is an
+  alternative. Phone or compact-camera manipulation is an aspirational demo;
+  device plus adapter must fit the payload budget.
+- Before treating 0.5 kg as achievable, size the joints for payload, gripper,
+  links, and dynamic margin. At 381 mm, the payload alone creates about
+  1.87 N·m static shoulder torque.
+
 ## Current architecture decisions
 - Actuation: NEMA 17 stepper motors (1.5A, 42 N·cm), TMC2209 drivers
 - Position sensing: AS5600 magnetic absolute encoders

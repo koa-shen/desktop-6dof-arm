@@ -10,6 +10,7 @@
             "includePath": [
                 "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/src",
                 "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/.pio/libdeps/uno/HX711/src",
                 "C:/Users/koash/.platformio/packages/framework-arduino-avr/cores/arduino",
                 "C:/Users/koash/.platformio/packages/framework-arduino-avr/variants/standard",
                 "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
@@ -23,6 +24,7 @@
                 "path": [
                     "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/src",
                     "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "C:/Users/koash/Documents/Robot Arm Project/desktop-6dof-arm/.pio/libdeps/uno/HX711/src",
                     "C:/Users/koash/.platformio/packages/framework-arduino-avr/cores/arduino",
                     "C:/Users/koash/.platformio/packages/framework-arduino-avr/variants/standard",
                     "C:/Users/koash/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
